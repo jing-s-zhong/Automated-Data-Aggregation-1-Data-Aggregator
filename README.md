@@ -2,7 +2,7 @@
 
 Data aggregation is a common data processing method, which is widely used in data analysis, business intelligence and machine learning projects. It is quite often that we need to aggregate the data from many data sources in a very different format, and the data format may change from time to time. It could be a challenge to program a data processing application to handle the varieties of this case. Here we introduce an automation solution that solves the case where all the source data are continuously being loaded into a series of database tables with the different table schemas. 
 
-## Concept Introduction
+## I. Concept Introduction
 
 Let’s compare our data processing case with an automated color paint product line to extract the key elements and control factors of the system, then use these elements and factors  to model our data aggregation.
 
@@ -47,7 +47,7 @@ Data_Check_Schedule | Property | Timestamp of the last check of availability
 Transformation | Method | A query or view to refactor the data format
 
 
-## Data Modeling
+## II. Data Modeling
 
 Based on the previous description, we can easily figure out a very simple data model just having two entities in our case. The entity relationship diagram is illustrated in  Figure-2.
 
@@ -56,8 +56,9 @@ Based on the previous description, we can easily figure out a very simple data m
 Figure-2 Entity Relationship Diagram
 
 
-### Target Data Definition
+### A. Target Data Definition
 
+```
 1.TARGET_LABEL (TEXT): 
 2.TARGET_TABLE (TEXT): 
 3.BATCH_CONTROL_COLUMN (TEXT): 
@@ -75,10 +76,12 @@ Figure-2 Entity Relationship Diagram
 15.AGGREGATE_COLUMNS (ARRAY): 
 16.AGGREGATE_FUNCTIONS (ARRAY): 
 17.DEFAULT_PROCEDURE (TEXT): 
+```
 
 
-### Source Data Definition
+### B. Source Data Definition
 
+```
 1.SOURCE_LABEL (TEXT): 
 2.TARGET_TABLE (TEXT): 
 3.SOURCE_TABLE (TEXT): 
@@ -88,22 +91,25 @@ Figure-2 Entity Relationship Diagram
 7.DATA_AVAILABLETIME (TIMESTAMP_NTZ): 
 8.DATA_CHECKSCHEDULE (TIMESTAMP_NTZ): 
 9.TRANSFORMATION (TEXT): 
+```
 
-## Code Implementation
+## III. Code Implementation
 
 As all raw data have been ingested into a snowflake warehouse already, we will implement the processing with snowflake stored procedures and functions. Snowflake supports a simplified javascript API, the functions and procedures can be programmed in javascript, so that most javascript programmers involve the work quickly with a very short time learning.
 
-### Single Chunk Process 
+### A. Single Chunk Process 
 
 ![Single chunk processing flowchart](images/figure3-single-chunk-processing.jpg?raw=true "Single chunk processing flowchart")
+
 Figure-3 Flowchart for single chunk processing
 
-### Loop The Chunks Process
+### B. Loop The Chunks Process
 
-![Loop multi-chunks processing](images/figure4-loop-multi-chuks-processing.jpgraw=true "Loop multi-chunks processing flowchart")
+![Loop multi-chunks processing](images/figure4-loop-multi-chunks-processing.jpg?raw=true "Loop multi-chunks processing flowchart")
+
 Figure-4 Flowchart for loop multi-chunks processing
 
-## Aggregation Setup
+## IV. Aggregation Setup
 
 Here we are going to set up a revenue data aggregation/allocation for Exec Reports. The target table namly “BI.ACCOUNT_DATA.SELLSIDE_ACCOUNT_DATA_DAILY” is created by running the following SQL script, then we go through the listed steps in following sections to complete the full setup.
 
@@ -124,8 +130,9 @@ CREATE OR REPLACE TABLE BI.ACCOUNT_DATA.SELLSIDE_ACCOUNT_DATA_DAILY (
 	);
 ```
 
-### Aggregation Target Setup
+### A. Aggregation Target Setup
 
+```
 --
 DELETE FROM BI._CONTROL_LOGIC.DATA_AGGREGATION_TARGETS
 WHERE TARGET_TABLE = 'BI.ACCOUNT_DATA.SELLSIDE_ACCOUNT_DATA_DAILY';
@@ -206,10 +213,11 @@ VALUES (
 	-- what aggregation function will be used for every aggregation column
 	,'["AVG(?)","SUM(?)","SUM(?)","SUM(?)"]'
 );
+```
 
+### B. Aggregation Source Setup
 
-### Aggregation Source Setup
-
+```
 -- visual check
 SELECT *
 FROM BI._CONTROL_LOGIC.DATA_AGGREGATION_SOURCES
@@ -273,21 +281,25 @@ VALUES (
       GROUP BY 1,2,3,4,5,6,7,8,9,10
       '
 );
+```
 
 
-## Schedule The Process
+## V. Schedule The Process
 
 
-### Kick a Manual Run
+### A. Kick a Manual Run
 
-#### Run a Single chunk process
+#### 1. Run a Single chunk process
 
+```
 -- Manually test one day's data population to test settings
 CALL DATA_AGGREGATOR('BI.ACCOUNT_DATA.SELLSIDE_ACCOUNT_DATA_DAILY', '2019-12-31', 0);
+```
 
 
-#### Run a batch period process
+#### 2. Run a batch period process
 
+```
 -- Setup an initial starting date for next auto-run
 UPDATE BI._CONTROL_LOGIC.DATA_AGGREGATION_TARGETS
 SET BATCH_PROCESSED = '2019-12-31'
@@ -296,11 +308,13 @@ WHERE TARGET_TABLE = 'BI.ACCOUNT_DATA.SELLSIDE_ACCOUNT_DATA_DAILY';
 
 -- Automate the Aggregate data population
 CALL DATA_AGGREGATOR('BI.ACCOUNT_DATA.SELLSIDE_ACCOUNT_DATA_DAILY', 0);
+```
 
-### Schedule by Tasks
+### B. Schedule by Tasks
 
-#### Sliding Period Task
+#### 1. Sliding Period Task
 
+```
 -- Create root task with a schedule
 CREATE OR REPLACE TASK HOURLY_POPULATE_SELLSIDE_DATA_AVAILABILITY
     WAREHOUSE = S1_BI
@@ -319,9 +333,11 @@ CALL DATA_AGGREGATOR ('BI.ACCOUNT_DATA.SELLSIDE_ACCOUNT_DATA_DAILY', 0);
 
 -- Enable the root taks for hourly scheduled
 SELECT SYSTEM$TASK_DEPENDENTS_ENABLE('HOURLY_POPULATE_SELLSIDE_DATA_AVAILABILITY');
+```
 
-#### Full Automated Task
+#### 2. Full Automated Task
 
+```
 -- Create root task with a schedule
 CREATE OR REPLACE TASK HOURLY_POPULATE_SELLSIDE_DATA_AVAILABILITY
     WAREHOUSE = S1_BI
@@ -338,16 +354,17 @@ CALL DATA_AGGREGATOR ('BI.ACCOUNT_DATA.SELLSIDE_ACCOUNT_DATA_DAILY', 0);
 
 -- Enable the root taks for hourly scheduled
 SELECT SYSTEM$TASK_DEPENDENTS_ENABLE('HOURLY_POPULATE_SELLSIDE_DATA_AVAILABILITY');
+```
 
-## Author
+## VI. Author
 
 
 
-## License
+## VII. License
 
 This project is licensed under the MIT License - see the [LICENSE.md](LICENSE.md) file for details
 
-## Acknowledgments
+## VIII. Acknowledgments
 
 * Hat tip to anyone whose code was used
 * Inspiration
