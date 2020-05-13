@@ -6,4 +6,4 @@ snowsql ^
 -o quiet=true ^
 -o friendly=true ^
 -D db_name=BI_TEST ^
--D sc_name=CONTRL_LOGIC
+-D sc_name=_CONTRL_LOGIC
