@@ -1,7 +1,3 @@
-Here is the configuration storage area. The detailed configuration files are followings.
+The SnowSQL client is required to manage the deployment. The SnowSQL configuration file is in a hidden folder under user's profile.
 
 .snowsql\config -- snowsql client config files
-.aws
-
-
- 
