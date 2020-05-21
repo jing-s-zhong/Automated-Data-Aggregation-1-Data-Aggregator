@@ -271,16 +271,21 @@ VALUES (
 	,'_TEST_DATA_SOURCE_2'
 	);
 --
--- Populate summary data
+-- Populate summary data of one day
 --
 CALL DATA_AGGREGATOR('_TEST_DATA_TARGET_1', '2020-01-07', 1); 
 --
---
+-- Populate summary data of all available dayes
 --
 CALL DATA_AGGREGATOR('_TEST_DATA_TARGET_1', 0); 
 --
--- Query target registrtion
+-- Check result of aggrgation 1
 --
+select data_ts, count(*) cnt
+from _TEST_DATA_TARGET_1
+group by 1
+order by 1 desc
+;
 --
 -- Create dummay aggregation data target 2
 -- 
@@ -429,29 +434,18 @@ VALUES (
 	,'_TEST_DATA_SOURCE_2'
 	);
 --
--- Populate summary data
+-- Populate summary data of one day
 --
 CALL DATA_AGGREGATOR('_TEST_DATA_TARGET_2', '2020-01-07', 1); 
 --
---
+-- Populate summary data of all available dayes
 --
 CALL DATA_AGGREGATOR('_TEST_DATA_TARGET_2', 0); 
 --
--- Query source registrtion
---
---
--- Query aggregation data source
---
---
--- Check the data for test date
+-- Check result of aggrgation 2
 --
 select data_ts, count(*) cnt
-from "BI_TEST"."_TEST_"."_TEST_DATA_TARGET_1"
-group by 1
-order by 1 desc
-;
-select data_ts, count(*) cnt
-from "BI_TEST"."_TEST_"."_TEST_DATA_TARGET_2"
+from _TEST_DATA_TARGET_2
 group by 1
 order by 1 desc
 ;
