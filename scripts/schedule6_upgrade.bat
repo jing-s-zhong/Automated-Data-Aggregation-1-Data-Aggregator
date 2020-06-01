@@ -21,9 +21,12 @@ goto done
 
 :missDb
 @echo First argument for DB name is missing!
-goto done
+goto example
 
 :missSchema
 @echo Second argument for SCHEMA name is missing!
+
+:example
+@echo Example: schedule6_upgrade.bat BI_TEST _CONTROL_LOGIC
 
 :done

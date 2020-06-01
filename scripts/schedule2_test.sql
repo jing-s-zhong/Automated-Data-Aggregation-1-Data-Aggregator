@@ -64,60 +64,62 @@ SELECT DATA_PATTERN(PARSE_JSON('[1,1,0,0,1,1,0,0,0,1,1,1,1,0,0,0,0,0,0,0,0]')) P
 -- DROP TABLE _TEST_DATA_SOURCE_1;
 CREATE OR REPLACE TRANSIENT TABLE _TEST_DATA_SOURCE_1
 AS
-SELECT 0 DATA_PT,
-	DATEADD(D, -UNIFORM(1, 60, RANDOM(1)), CURRENT_DATE())::DATE DATA_TS, 
-    1 DATA_I1,
-    UNIFORM(0, 15, RANDOM(11)) DATA_I2,
-    NULLIF(UNIFORM(0, 15, RANDOM(111)),0) DATA_I3,
-    RANDSTR(UNIFORM(1, 10, RANDOM()), RANDOM()) DATA_A1,
-    RANDSTR(ABS(RANDOM()) % 10, RANDOM()) DATA_A2,
-    NULLIF(RANDSTR(UNIFORM(0, 10, RANDOM()), RANDOM()),'') DATA_A3,
-    UNIFORM(0, 1000, RANDOM(10)) VALUE_I1,
-    UNIFORM(0, 1500, RANDOM(15))/10 VALUE_D1
-FROM TABLE(GENERATOR(ROWCOUNT => 1000)) V 
+SELECT 0::NUMBER DATA_PT,
+	DATEADD(MINUTE, -UNIFORM(1, 50000, RANDOM(1)), CURRENT_DATE())::TIMESTAMP_NTZ DATA_TS, 
+    1::NUMBER DATA_I1,
+    UNIFORM(0, 15, RANDOM(11))::NUMBER DATA_I2,
+    NULLIF(UNIFORM(0, 15, RANDOM(111)),0)::NUMBER DATA_I3,
+    RANDSTR(UNIFORM(1, 10, RANDOM()), RANDOM())::VARCHAR DATA_A1,
+    RANDSTR(ABS(RANDOM()) % 10, RANDOM())::VARCHAR  DATA_A2,
+    NULLIF(RANDSTR(UNIFORM(0, 10, RANDOM()), RANDOM()),'')::VARCHAR  DATA_A3,
+    UNIFORM(0, 50, RANDOM(10))::NUMBER VALUE_I1,
+    UNIFORM(0, 1500, RANDOM(15))/10::FLOAT VALUE_D1
+FROM TABLE(GENERATOR(ROWCOUNT => 50000)) V 
 ORDER BY 1;
 --
---UPDATE _TEST_DATA_SOURCE_1
---SET DATA_PT = _CONTROL_LOGIC.DATA_PATTERN(
---    DATA_PT,
---    DATA_TS, 
---    DATA_I1,
---    DATA_I2,
---    DATA_I3,
---    DATA_A1,
---    DATA_A2,
---    DATA_A3
---);
+UPDATE _TEST_DATA_SOURCE_1
+SET DATA_PT = DATA_PATTERN(ARRAY_CONSTRUCT(
+    1,
+	'_TEST_DATA_SOURCE_1',
+    DATE(DATA_TS), 
+    DATA_I1,
+    DATA_I2,
+    DATA_I3,
+    DATA_A1,
+    DATA_A2,
+    DATA_A3
+));
 -- 
 -- Create dummay aggregation data source 2
 -- 
 -- DROP TABLE _TEST_DATA_SOURCE_2;
 CREATE OR REPLACE TRANSIENT TABLE _TEST_DATA_SOURCE_2
 AS
-SELECT 0 DATA_PT,
-	DATEADD(D, -UNIFORM(1, 60, RANDOM(2)), CURRENT_DATE())::DATE DATA_TS, 
-    1 DATA_I1,
-    UNIFORM(0, 15, RANDOM(22)) DATA_I2,
-    NULLIF(UNIFORM(0, 15, RANDOM(222)),0) DATA_I3,
-    RANDSTR(UNIFORM(1, 10, RANDOM()), RANDOM()) DATA_A1,
-    RANDSTR(ABS(RANDOM()) % 10, RANDOM()) DATA_A2,
-    NULLIF(RANDSTR(UNIFORM(0, 10, RANDOM()), RANDOM()),'') DATA_A3,
-    UNIFORM(0, 1000, RANDOM(10)) VALUE_I1,
-    UNIFORM(0, 1500, RANDOM(15))/10 VALUE_D1
-FROM TABLE(GENERATOR(ROWCOUNT => 1000)) V 
+SELECT 0::NUMBER DATA_PT,
+	DATEADD(MINUTE, -UNIFORM(1, 50000, RANDOM(2)), CURRENT_DATE())::TIMESTAMP_NTZ DATA_TS, 
+    1::NUMBER DATA_I1,
+    UNIFORM(0, 15, RANDOM(22))::NUMBER DATA_I2,
+    NULLIF(UNIFORM(0, 15, RANDOM(222)),0)::NUMBER DATA_I3,
+    RANDSTR(UNIFORM(1, 10, RANDOM()), RANDOM())::VARCHAR  DATA_A1,
+    RANDSTR(ABS(RANDOM()) % 10, RANDOM())::VARCHAR DATA_A2,
+    NULLIF(RANDSTR(UNIFORM(0, 10, RANDOM()), RANDOM()),'')::VARCHAR DATA_A3,
+    UNIFORM(0, 50, RANDOM(10))::NUMBER VALUE_I1,
+    UNIFORM(0, 1500, RANDOM(15))/10::FLOAT VALUE_D1
+FROM TABLE(GENERATOR(ROWCOUNT => 50000)) V 
 ORDER BY 1;
 --
---UPDATE _TEST_DATA_SOURCE_2
---SET DATA_PT = _CONTROL_LOGIC.DATA_PATTERN(
---    DATA_PT,
---    DATA_TS, 
---    DATA_I1,
---    DATA_I2,
---    DATA_I3,
---    DATA_A1,
---    DATA_A2,
---    DATA_A3
---);
+UPDATE _TEST_DATA_SOURCE_2
+SET DATA_PT = DATA_PATTERN(ARRAY_CONSTRUCT(
+    1,
+	'_TEST_DATA_SOURCE_2',
+    DATE(DATA_TS), 
+    DATA_I1,
+    DATA_I2,
+    DATA_I3,
+    DATA_A1,
+    DATA_A2,
+    DATA_A3
+));
 -------------------------------------------------------
 -- Create two dummy aggreagtion data targets 
 -------------------------------------------------------
@@ -126,6 +128,7 @@ ORDER BY 1;
 -- 
 CREATE OR REPLACE TRANSIENT TABLE _TEST_DATA_TARGET_1 (
 	"DATA_PT" 								NUMBER     NOT NULL, 
+	"DATA_DN"	 							VARCHAR, 
 	"DATA_TS" 								DATE       NOT NULL, 
 	"DATA_I1" 								NUMBER     NOT NULL, 
 	"DATA_I2"	 							NUMBER, 
@@ -133,8 +136,10 @@ CREATE OR REPLACE TRANSIENT TABLE _TEST_DATA_TARGET_1 (
 	"DATA_A1"	 							VARCHAR, 
 	"DATA_A2"	 							VARCHAR, 
 	"DATA_A3"	 							VARCHAR, 
-	"VALUE_I1" 								NUMBER, 
-	"VALUE_D1" 								FLOAT
+	"VSUM_I1" 								NUMBER, 
+	"VCNT_I2" 								NUMBER, 
+	"VSUM_D1" 								FLOAT,
+	"VAVG_D2" 								FLOAT
 ); 
 --
 -- Register the tagegt table 1
@@ -164,7 +169,7 @@ SELECT 'Test: Dummay aggregation target 1'
 	,$2
 	,$3
 	,$4
-	,DATE_TRUNC('DAY', CURRENT_DATE ()) - 31
+	,DATE_TRUNC('DAY', CURRENT_DATE ()-31)
 	,NULL
 	,NULL
 	,$5
@@ -184,8 +189,9 @@ VALUES (
 	,'DATEADD(MINUTE, :2, :1)'
 	,'DAILY'
 	-- all group-by columns in source data
-	,'["DATA_PT",
-		"DATA_TS", 
+	,'["DATA_PATTERN",
+		"DATA_NAME", 
+		"DATA_DATE", 
 		"DATA_I1",
 		"DATA_I2", 
 		"DATA_I3", 
@@ -194,8 +200,9 @@ VALUES (
 		"DATA_A3"
       ]'
 	-- group-by columns of target data and which source column is the match
-	,'["DATA_PT:DATA_PT", 
-		"DATA_TS:DATA_TS",
+	,'["DATA_PT:DATA_PATTERN", 
+		"DATA_DN:DATA_NAME",
+		"DATA_TS:DATA_DATE",
 		"DATA_I1:DATA_I1", 
 		"DATA_I2:DATA_I2", 
 		"DATA_I3:DATA_I3", 
@@ -204,11 +211,11 @@ VALUES (
 		"DATA_A3:DATA_A3"
        ]'
 	-- indicators of which group-by column are needed in target table
-	,'[1,1,1,1,1,1,1,1]'
+	,'[1,1,1,1,1,1,0,0,0]'
 	-- aggregate columns of target data and which aggregating column is the match
-	,'["VALUE_I1:VALUE_I1","VALUE_D1:VALUE_D1"]'
+	,'["VSUM_I1:VALUE_I1","VCNT_I2:VALUE_I2","VSUM_D1:VALUE_D1","VAVG_D2:VALUE_D2"]'
 	-- what aggregation function will be used for every aggregation column
-	,'["SUM(?)","SUM(?)"]'
+	,'["SUM(?)","COUNT(*)","SUM(?)","ROUND(AVG(?),2)"]'
 	);
 --
 -- Register the source data table
@@ -236,10 +243,26 @@ SELECT 'Test: Dummay aggregation target 1 source 1'
 	,$3
 FROM
 VALUES (
-	'_TEST_DATA_TARGET_1'
-	,'_TEST_DATA_SOURCE_1'
-	,'_TEST_DATA_SOURCE_1'
-	);
+		'_TEST_DATA_TARGET_1'
+		,'_TEST_DATA_SOURCE_1'
+		,'
+		SELECT DATA_PT DATA_PATTERN
+			,\'_TEST_DATA_SOURCE_1\'::VARCHAR DATA_NAME
+			,DATE(DATA_TS) DATA_DATE
+			,DATA_TS
+			,DATA_I1
+			,DATA_I2
+			,DATA_I3
+			,DATA_A1
+			,DATA_A2
+			,DATA_A3
+			,VALUE_I1
+			,VALUE_I1 VALUE_I2
+			,VALUE_D1
+			,VALUE_D1 VALUE_D2 
+		FROM _TEST_DATA_SOURCE_1
+		'
+		);
 --
 -- Register the source data table
 -- 
@@ -266,10 +289,26 @@ SELECT 'Test: Dummay aggregation target 1 source 2'
 	,$3
 FROM
 VALUES (
-	'_TEST_DATA_TARGET_1'
-	,'_TEST_DATA_SOURCE_2'
-	,'_TEST_DATA_SOURCE_2'
-	);
+		'_TEST_DATA_TARGET_1'
+		,'_TEST_DATA_SOURCE_2'
+		,'
+		SELECT DATA_PT DATA_PATTERN
+			,\'_TEST_DATA_SOURCE_2\'::VARCHAR DATA_NAME
+			,DATE(DATA_TS) DATA_DATE
+			,DATA_TS
+			,DATA_I1
+			,DATA_I2
+			,DATA_I3
+			,DATA_A1
+			,DATA_A2
+			,DATA_A3
+			,VALUE_I1
+			,VALUE_I1 VALUE_I2
+			,VALUE_D1
+			,VALUE_D1 VALUE_D2 
+		FROM _TEST_DATA_SOURCE_2
+		'
+		);
 --
 -- Populate summary data of one day
 --
@@ -297,8 +336,10 @@ CREATE OR REPLACE TRANSIENT TABLE _TEST_DATA_TARGET_2 (
 	"DATA_A1"	 							VARCHAR, 
 	"DATA_A2"	 							VARCHAR, 
 	"DATA_A3"	 							VARCHAR, 
-	"VALUE_I1" 								NUMBER, 
-	"VALUE_D1" 								FLOAT
+	"VSUM_I1" 								NUMBER, 
+	"VCNT_I2" 								NUMBER, 
+	"VSUM_D1" 								FLOAT,
+	"VAVG_D2" 								FLOAT
 ); 
 --
 -- Register the tagegt table 1
@@ -328,7 +369,7 @@ SELECT 'Test: Dummay aggregation target 2'
 	,$2
 	,$3
 	,$4
-	,DATE_TRUNC('DAY', CURRENT_DATE ()) - 31
+	,DATE_TRUNC('DAY', CURRENT_DATE ()-31)
 	,NULL
 	,NULL
 	,$5
@@ -348,8 +389,9 @@ VALUES (
 	,'DATEADD(MINUTE, :2, :1)'
 	,'DAILY'
 	-- all group-by columns in source data
-	,'["DATA_PT",
-		"DATA_TS", 
+	,'["DATA_PATTERN",
+		"DATA_NAME", 
+		"DATA_DATE", 
 		"DATA_I1",
 		"DATA_I2", 
 		"DATA_I3", 
@@ -358,7 +400,7 @@ VALUES (
 		"DATA_A3"
       ]'
 	-- group-by columns of target data and which source column is the match
-	,'["DATA_TS:DATA_TS",
+	,'["DATA_TS:DATA_DATE",
 		"DATA_I1:DATA_I1", 
 		"DATA_I2:DATA_I2", 
 		"DATA_I3:DATA_I3", 
@@ -367,11 +409,11 @@ VALUES (
 		"DATA_A3:DATA_A3"
        ]'
 	-- indicators of which group-by column are needed in target table
-	,'[0,1,1,1,1,1,1,1]'
+	,'[0,0,1,1,1,1,1,1,1]'
 	-- aggregate columns of target data and which aggregating column is the match
-	,'["VALUE_I1:VALUE_I1","VALUE_D1:VALUE_D1"]'
+	,'["VSUM_I1:VALUE_I1","VCNT_I2:VALUE_I2","VSUM_D1:VALUE_D1","VAVG_D2:VALUE_D2"]'
 	-- what aggregation function will be used for every aggregation column
-	,'["SUM(?)","SUM(?)"]'
+	,'["SUM(?)","COUNT(DISTINCT ?)","SUM(?)","ROUND(AVG(?),2)"]'
 	);
 --
 -- Register the source data table
@@ -399,10 +441,26 @@ SELECT 'Test: Dummay aggregation target 2 source 1'
 	,$3
 FROM
 VALUES (
-	'_TEST_DATA_TARGET_2'
-	,'_TEST_DATA_SOURCE_1'
-	,'_TEST_DATA_SOURCE_1'
-	);
+		'_TEST_DATA_TARGET_2'
+		,'_TEST_DATA_SOURCE_1'
+		,'
+		SELECT DATA_PT DATA_PATTERN
+			,\'_TEST_DATA_SOURCE_1\'::VARCHAR DATA_NAME
+			,DATE(DATA_TS) DATA_DATE
+			,DATA_TS
+			,DATA_I1
+			,DATA_I2
+			,DATA_I3
+			,DATA_A1
+			,DATA_A2
+			,DATA_A3
+			,VALUE_I1
+			,VALUE_I1 VALUE_I2
+			,VALUE_D1
+			,VALUE_D1 VALUE_D2 
+		FROM _TEST_DATA_SOURCE_1
+		'
+		);
 --
 -- Register the source data table
 -- 
@@ -429,10 +487,26 @@ SELECT 'Test: Dummay aggregation target 2 source 2'
 	,$3
 FROM
 VALUES (
-	'_TEST_DATA_TARGET_2'
-	,'_TEST_DATA_SOURCE_2'
-	,'_TEST_DATA_SOURCE_2'
-	);
+		'_TEST_DATA_TARGET_2'
+		,'_TEST_DATA_SOURCE_2'
+		,'
+		SELECT DATA_PT DATA_PATTERN
+			,\'_TEST_DATA_SOURCE_2\'::VARCHAR DATA_NAME
+			,DATE(DATA_TS) DATA_DATE
+			,DATA_TS
+			,DATA_I1
+			,DATA_I2
+			,DATA_I3
+			,DATA_A1
+			,DATA_A2
+			,DATA_A3
+			,VALUE_I1
+			,VALUE_I1 VALUE_I2
+			,VALUE_D1
+			,VALUE_D1 VALUE_D2 
+		FROM _TEST_DATA_SOURCE_2
+		'
+		);
 --
 -- Populate summary data of one day
 --
