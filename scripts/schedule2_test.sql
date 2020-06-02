@@ -59,7 +59,7 @@ SELECT DATA_PATTERN(PARSE_JSON('[1,1,0,0,1,1,0,0,0,1,1,1,1,0,0,0,0,0,0,0,0]')) P
 -- Create two dummy aggreagtion data sources
 -------------------------------------------------------
 --
--- Create dummay aggregation data source 1
+-- Create dummy aggregation data source 1
 --
 -- DROP TABLE _TEST_DATA_SOURCE_1;
 CREATE OR REPLACE TRANSIENT TABLE _TEST_DATA_SOURCE_1
@@ -92,7 +92,7 @@ SET DATA_PT = DATA_PATTERN(ARRAY_CONSTRUCT(
     DATA_A3
 ));
 --
--- Create dummay aggregation data source 2
+-- Create dummy aggregation data source 2
 --
 -- DROP TABLE _TEST_DATA_SOURCE_2;
 CREATE OR REPLACE TRANSIENT TABLE _TEST_DATA_SOURCE_2
@@ -128,7 +128,7 @@ SET DATA_PT = DATA_PATTERN(ARRAY_CONSTRUCT(
 -- Create two dummy aggreagtion data targets
 -------------------------------------------------------
 --
--- Create dummay aggregation data target 1
+-- Create dummy aggregation data target 1
 --
 CREATE OR REPLACE TRANSIENT TABLE _TEST_DATA_TARGET_1 (
 	"DATA_PT" 								NUMBER         NOT NULL,
@@ -154,7 +154,7 @@ CREATE OR REPLACE TRANSIENT TABLE _TEST_DATA_TARGET_1 (
 -- Update or add the aggregation target
 MERGE INTO DATA_AGGREGATION_TARGETS D
 USING (
-  SELECT 'Test: Dummay aggregation target 1' TARGET_LABEL
+  SELECT 'Test: dummy aggregation target 1' TARGET_LABEL
   	,$1 TARGET_TABLE
   	,$2 BATCH_CONTROL_COLUMN
   	,$3 BATCH_CONTROL_SIZE
@@ -275,7 +275,7 @@ VALUES (
 -- Update or add the aggregation source
 MERGE INTO DATA_AGGREGATION_SOURCES D
 USING (
-  SELECT 'Test: Dummay aggregation target 1 source 1' SOURCE_LABEL
+  SELECT 'Test: dummy aggregation target 1 source 1' SOURCE_LABEL
     	,$1 TARGET_TABLE
     	,$2 SOURCE_TABLE
     	,true SOURCE_ENABLED
@@ -349,7 +349,7 @@ VALUES (
 -- Update or add the aggregation source
 MERGE INTO DATA_AGGREGATION_SOURCES D
 USING (
-  SELECT 'Test: Dummay aggregation target 1 source 2' SOURCE_LABEL
+  SELECT 'Test: dummy aggregation target 1 source 2' SOURCE_LABEL
     	,$1 TARGET_TABLE
     	,$2 SOURCE_TABLE
     	,true SOURCE_ENABLED
@@ -433,7 +433,7 @@ group by 1
 order by 1 desc
 ;
 --
--- Create dummay aggregation data target 2
+-- Create dummy aggregation data target 2
 --
 CREATE OR REPLACE TRANSIENT TABLE _TEST_DATA_TARGET_2 (
   "DATA_PT" 								NUMBER,
@@ -459,7 +459,7 @@ CREATE OR REPLACE TRANSIENT TABLE _TEST_DATA_TARGET_2 (
 -- Update or add the aggregation target
 MERGE INTO DATA_AGGREGATION_TARGETS D
 USING (
-  SELECT 'Test: Dummay aggregation target 2' TARGET_LABEL
+  SELECT 'Test: dummy aggregation target 2' TARGET_LABEL
   	,$1 TARGET_TABLE
   	,$2 BATCH_CONTROL_COLUMN
   	,$3 BATCH_CONTROL_SIZE
@@ -576,7 +576,7 @@ VALUES (
 -- Update or add the aggregation source
 MERGE INTO DATA_AGGREGATION_SOURCES D
 USING (
-  SELECT 'Test: Dummay aggregation target 2 source 1' SOURCE_LABEL
+  SELECT 'Test: dummy aggregation target 2 source 1' SOURCE_LABEL
       ,$1 TARGET_TABLE
       ,$2 SOURCE_TABLE
       ,true SOURCE_ENABLED
@@ -650,7 +650,7 @@ VALUES (
 -- Update or add the aggregation source
 MERGE INTO DATA_AGGREGATION_SOURCES D
 USING (
-  SELECT 'Test: Dummay aggregation target 2 source 2' SOURCE_LABEL
+  SELECT 'Test: dummy aggregation target 2 source 2' SOURCE_LABEL
       ,$1 TARGET_TABLE
       ,$2 SOURCE_TABLE
       ,true SOURCE_ENABLED
