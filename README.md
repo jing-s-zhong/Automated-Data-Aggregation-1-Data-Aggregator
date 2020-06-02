@@ -41,7 +41,7 @@ Attritue | Type | Description
 Target_Table | Property | Which summary data needs this source
 Source_Table | Property | The source data table name
 Pattern_Default | Property | Default granularity of the data in source table
-Parttern_Flexible | Property | Allow multi-granularities exist in one table
+Pattern_Flexible | Property | Allow multi-granularities exist in one table
 Data_Available_Time | Property | The timestamp of the committed source data
 Data_Check_Schedule | Property | Timestamp of the last check of availability
 Transformation | Method | A query or view to refactor the data format
