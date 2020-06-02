@@ -7,7 +7,7 @@ rem ====================================================
 if [%1]==[] goto missDb
 if [%2]==[] goto missSchema
 
-@echo Enptying the test data of the data aggregator in %1.%2
+@echo Emptying the test data of the data aggregator in %1.%2
 snowsql ^
 --config ..\..\config\.snowsql\config ^
 -f .\schedule3_empty.sql ^
@@ -16,7 +16,7 @@ snowsql ^
 -o friendly=true ^
 -D db_name=%1 ^
 -D sc_name=%2
-@echo The data aggregator is emptyed the test data in %1.%2
+@echo The test data of the data aggregator in %1.%2 is emptied
 goto done
 
 :missDb

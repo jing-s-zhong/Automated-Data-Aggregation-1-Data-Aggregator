@@ -7,7 +7,7 @@ rem ====================================================
 if [%1]==[] goto missDb
 if [%2]==[] goto missSchema
 
-@echo Removing the data aggregator in %1.%2
+@echo Removing the data aggregator from %1.%2
 snowsql ^
 --config ..\..\config\.snowsql\config ^
 -f .\schedule5_remove.sql ^

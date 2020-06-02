@@ -7,7 +7,7 @@ rem ====================================================
 if [%1]==[] goto missDb
 if [%2]==[] goto missSchema
 
-@echo Deploying the data aggregator in %1.%2
+@echo Upgrading the data aggregator in %1.%2
 snowsql ^
 --config ..\..\config\.snowsql\config ^
 -f .\schedule6_upgrade.sql ^
@@ -16,7 +16,7 @@ snowsql ^
 -o friendly=true ^
 -D db_name=%1 ^
 -D sc_name=%2
-@echo The data aggregator is deployed in %1.%2
+@echo The data aggregator in %1.%2 has been upgraded
 goto done
 
 :missDb
