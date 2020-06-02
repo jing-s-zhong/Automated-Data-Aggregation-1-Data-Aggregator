@@ -59,7 +59,7 @@ SELECT DATA_PATTERN(PARSE_JSON('[1,1,0,0,1,1,0,0,0,1,1,1,1,0,0,0,0,0,0,0,0]')) P
 -- Create two dummy aggreagtion data sources
 -------------------------------------------------------
 --
--- Create dummay aggregation data source 1
+-- Create dummy aggregation data source 1
 --
 -- DROP TABLE _TEST_DATA_SOURCE_1;
 CREATE OR REPLACE TRANSIENT TABLE _TEST_DATA_SOURCE_1
@@ -92,7 +92,7 @@ SET DATA_PT = DATA_PATTERN(ARRAY_CONSTRUCT(
     DATA_A3
 ));
 --
--- Create dummay aggregation data source 2
+-- Create dummy aggregation data source 2
 --
 -- DROP TABLE _TEST_DATA_SOURCE_2;
 CREATE OR REPLACE TRANSIENT TABLE _TEST_DATA_SOURCE_2
@@ -128,7 +128,7 @@ SET DATA_PT = DATA_PATTERN(ARRAY_CONSTRUCT(
 -- Create two dummy aggreagtion data targets
 -------------------------------------------------------
 --
--- Create dummay aggregation data target 1
+-- Create dummy aggregation data target 1
 --
 CREATE OR REPLACE TRANSIENT TABLE _TEST_DATA_TARGET_1 (
 	"DATA_PT" 								NUMBER       NOT NULL,
@@ -170,7 +170,7 @@ INSERT INTO DATA_AGGREGATION_TARGETS (
 	,AGGREGATE_FUNCTIONS
 	,DEFAULT_PROCEDURE
 	)
-SELECT 'Test: Dummay aggregation target 1'
+SELECT 'Test: dummy aggregation target 1'
 	,$1
 	,$2
 	,$3
@@ -242,7 +242,7 @@ INSERT INTO DATA_AGGREGATION_SOURCES (
   	,DATA_CHECKSCHEDULE
   	,TRANSFORMATION
   	)
-SELECT 'Test: Dummay aggregation target 1 source 1'
+SELECT 'Test: dummy aggregation target 1 source 1'
   	,$1
   	,$2
   	,true
@@ -289,7 +289,7 @@ INSERT INTO DATA_AGGREGATION_SOURCES (
   	,DATA_CHECKSCHEDULE
   	,TRANSFORMATION
   	)
-SELECT 'Test: Dummay aggregation target 1 source 2'
+SELECT 'Test: dummy aggregation target 1 source 2'
   	,$1
   	,$2
   	,true
@@ -338,7 +338,7 @@ group by 1
 order by 1 desc
 ;
 --
--- Create dummay aggregation data target 2
+-- Create dummy aggregation data target 2
 --
 CREATE OR REPLACE TRANSIENT TABLE _TEST_DATA_TARGET_2 (
   "DATA_PT" 								NUMBER,
@@ -380,7 +380,7 @@ INSERT INTO DATA_AGGREGATION_TARGETS (
 	,AGGREGATE_FUNCTIONS
 	,DEFAULT_PROCEDURE
 	)
-SELECT 'Test: Dummay aggregation target 2'
+SELECT 'Test: dummy aggregation target 2'
 	,$1
 	,$2
 	,$3
@@ -448,7 +448,7 @@ INSERT INTO DATA_AGGREGATION_SOURCES (
     ,DATA_CHECKSCHEDULE
     ,TRANSFORMATION
     )
-SELECT 'Test: Dummay aggregation target 2 source 1'
+SELECT 'Test: dummy aggregation target 2 source 1'
     ,$1
     ,$2
     ,true
@@ -496,7 +496,7 @@ INSERT INTO DATA_AGGREGATION_SOURCES (
     ,DATA_CHECKSCHEDULE
     ,TRANSFORMATION
     )
-SELECT 'Test: Dummay aggregation target 2 source 2'
+SELECT 'Test: dummy aggregation target 2 source 2'
     ,$1
     ,$2
     ,true
