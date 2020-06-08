@@ -306,7 +306,7 @@ try {
 			+ `    ) \n`
 			+ `  GROUP BY ` + groupByList + `\n`
 			+ `  ) ` + sourceAlias[0] + ` \n`
-			+ `ON ` + dimensionList.split(',').map((x,i)=>{return `COALESCE(TO_CHAR(` + targetAlias + x + `),'') = COALESCE(TO_CHAR(` + sourceAlias + groupByColumns[i] + `),'')`}).join('\n AND ') + ` \n`
+			+ `ON ` + dimensionList.split(',').map((x,i)=>{return `COALESCE(TO_CHAR(` + targetAlias + x + `),'') = COALESCE(TO_CHAR(` + sourceAlias + groupByList.split(',')[i] + `),'')`}).join('\n AND ') + ` \n`
 			+ `WHEN MATCHED THEN UPDATE SET ` + measureColumns.map((x,i) =>{return x + ' = ' + sourceAlias[0] + `.` + aggregateColumns[i]}) + ` \n`
 			+ `WHEN NOT MATCHED THEN INSERT(` + dimensionList + `,` + measureColumns + `) \n`
 			+ `VALUES (` + groupByList.split(',').map(x=>{return sourceAlias[0] + `.` +  x}) + `,` 
@@ -433,7 +433,7 @@ try {
 			+ `    ) \n`
 			+ `  GROUP BY ` + groupByList + `\n`
 			+ `  ) ` + sourceAlias[0] + ` \n`
-			+ `ON ` + dimensionList.split(',').map((x,i)=>{return `COALESCE(TO_CHAR(` + targetAlias + x + `),'') = COALESCE(TO_CHAR(` + sourceAlias + groupByColumns[i] + `),'')`}).join('\n AND ') + ` \n`
+			+ `ON ` + dimensionList.split(',').map((x,i)=>{return `COALESCE(TO_CHAR(` + targetAlias + x + `),'') = COALESCE(TO_CHAR(` + sourceAlias + groupByList.split(',')[i] + `),'')`}).join('\n AND ') + ` \n`
 			+ `WHEN MATCHED THEN UPDATE SET ` + measureColumns.map((x,i) =>{return x + ' = ' + sourceAlias[0] + `.` + aggregateColumns[i]}) + ` \n`
 			+ `WHEN NOT MATCHED THEN INSERT(` + dimensionList + `,` + measureColumns + `) \n`
 			+ `VALUES (` + groupByList.split(',').map(x=>{return sourceAlias[0] + `.` +  x}) + `,`
