@@ -341,7 +341,7 @@ VALUES (
 	,S.DATA_CHECKSCHEDULE
 	,S.TRANSFORMATION
 	)
-; 
+;
 --
 -- Test new added source setting
 --
