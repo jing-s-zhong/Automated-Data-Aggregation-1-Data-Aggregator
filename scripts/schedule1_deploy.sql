@@ -374,8 +374,8 @@ try {
 	  FROM DATA_AGGREGATION_TARGETS d
 	  JOIN DATA_AGGREGATION_SOURCES s
 	  USING(TARGET_TABLE)
-	  WHERE d.TARGET_TABLE = :1
-	  AND s.SOURCE_ENABLED = True`;
+	  WHERE s.SOURCE_ENABLED = True
+		AND d.TARGET_TABLE = :1;`;
 
 	var sourceStmt = snowflake.createStatement({
 	  sqlText: sourceQuery,
@@ -410,7 +410,7 @@ try {
 	  if (groupByCompitable) {
 		var flagIndexLast = patternColumns.length - 1,
 			patternSegment = groupByPattern;
-		var selectList = groupByColumns[0] === "DATA_PATTERN" ? (patternFlexible ? 'BITOR(' + groupByColumns[0] + ',' + groupByPattern + ')' : groupByPattern) + ' ': '',
+		var selectList = groupByColumns[0] === "DATA_PATTERN" ? (patternFlexible ? 'BITOR(' + groupByColumns[0] + ',' + groupByPattern + ')' : groupByPattern) + ' ' : '',
 			dimensionList = '',
 			groupByList = '',
 			columnSplitter = '';

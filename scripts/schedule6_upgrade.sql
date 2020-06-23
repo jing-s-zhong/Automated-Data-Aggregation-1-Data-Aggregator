@@ -437,8 +437,8 @@ try {
 	  FROM DATA_AGGREGATION_TARGETS d
 	  JOIN DATA_AGGREGATION_SOURCES s
 	  USING(TARGET_TABLE)
-	  WHERE d.TARGET_TABLE = :1
-	  AND s.SOURCE_ENABLED = True`;
+	  WHERE s.SOURCE_ENABLED = True
+		AND d.TARGET_TABLE = :1;`;
 
 	var sourceStmt = snowflake.createStatement({
 	  sqlText: sourceQuery,
