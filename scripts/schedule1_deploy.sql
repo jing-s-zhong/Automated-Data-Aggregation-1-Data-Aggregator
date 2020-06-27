@@ -3,12 +3,13 @@ use database &{db_name};
 create schema if not exists &{sc_name};
 --create schema &{sc_name};
 use schema &{sc_name};
+!set variable_substitution=false;
 --
 -------------------------------------------------------
 -- Create task management tables
 -------------------------------------------------------
 --
--- DROP SEQUENCE DATA_AGGREGATION_SOURCES_SEQ;;
+-- DROP SEQUENCE DATA_AGGREGATION_TARGETS_SEQ;
 --
 CREATE SEQUENCE DATA_AGGREGATION_TARGETS_SEQ START = 1 INCREMENT = 1;
 --
@@ -40,7 +41,7 @@ CLUSTER BY (TARGET_TABLE)
 COMMENT = 'This tableis used to register the aggregation targets'
 ;
 --
--- DROP SEQUENCE DATA_AGGREGATION_SOURCES_SEQ;;
+-- DROP SEQUENCE DATA_AGGREGATION_SOURCES_SEQ;
 --
 CREATE SEQUENCE DATA_AGGREGATION_SOURCES_SEQ START = 1 INCREMENT = 1;
 --

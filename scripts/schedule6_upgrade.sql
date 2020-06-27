@@ -4,6 +4,7 @@ use database &{db_name};
 create schema if not exists &{sc_name};
 --create schema &{sc_name};
 use schema &{sc_name};
+!set variable_substitution=false;
 --
 -------------------------------------------------------
 -- Upgrade task management tables

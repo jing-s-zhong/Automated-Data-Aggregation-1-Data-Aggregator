@@ -1,6 +1,7 @@
 !set variable_substitution=true;
 use database &{db_name};
 use schema &{sc_name};
+!set variable_substitution=false;
 -------------------------------------------------------
 -- Create a dummy aggreagtion table
 -------------------------------------------------------
