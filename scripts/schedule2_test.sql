@@ -1,4 +1,3 @@
-
 !set variable_substitution=true;
 use database &{db_name};
 use schema &{sc_name};
