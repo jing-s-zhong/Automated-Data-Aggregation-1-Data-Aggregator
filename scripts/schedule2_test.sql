@@ -1,3 +1,4 @@
+
 !set variable_substitution=true;
 use database &{db_name};
 use schema &{sc_name};
@@ -434,7 +435,7 @@ VALUES (
 -- Test new added source setting
 --
 -- CALL DATA_AGGREGATOR ('<target table>', '<test date>', <script only>, <disabled only>);
-CALL DATA_AGGREGATOR ('_TEST_DATA_TARGET_1', TO_VARCHAR(CURRENT_DATE()-1), 0, 1);
+CALL DATA_AGGREGATOR ('_TEST_DATA_TARGET_1', TO_VARCHAR(CURRENT_DATE()-1), 0, 0);
 --
 -- Exclude new added source from testing
 --
@@ -456,7 +457,7 @@ AND SOURCE_TABLE IN ( ''
 --
 -- Populate summary data of one day
 --
-CALL DATA_AGGREGATOR('_TEST_DATA_TARGET_1', '2020-01-07', 1);
+CALL DATA_AGGREGATOR('_TEST_DATA_TARGET_1', '2020-01-07', 0);
 --
 -- Populate summary data of all available dayes
 --
@@ -757,7 +758,7 @@ VALUES (
 --
 -- Populate summary data of one day
 --
-CALL DATA_AGGREGATOR('_TEST_DATA_TARGET_2', '2020-01-07', 1);
+CALL DATA_AGGREGATOR('_TEST_DATA_TARGET_2', '2020-01-07', 0);
 --
 -- Populate summary data of all available dayes
 --
@@ -765,7 +766,7 @@ CALL DATA_AGGREGATOR('_TEST_DATA_TARGET_2', 0);
 --
 -- Check result of aggrgation 2
 --
-select data_ts, count(*) cnt
+select data_dt, count(*) cnt
 from _TEST_DATA_TARGET_2
 group by 1
 order by 1 desc

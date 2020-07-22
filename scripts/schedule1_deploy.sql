@@ -241,6 +241,7 @@ try {
 		  d.AGGREGATE_COLUMNS,
 		  d.AGGREGATE_FUNCTIONS,
 		  d.DEFAULT_PROCEDURE,
+		  s.SOURCE_LABEL,
 		  s.SOURCE_TABLE,
 		  s.TRANSFORMATION
 	  FROM DATA_AGGREGATION_TARGETS d
@@ -273,8 +274,9 @@ try {
 	  var measureColumns = sources.getColumnValue(10).map(x => x.split(':')[0]);
 	  var aggregateFunctions = sources.getColumnValue(11);
 	  var defaultProcedure = sources.getColumnValue(12);
-	  var sourceTable = sources.getColumnValue(13);
-	  var transformation = sources.getColumnValue(14);
+	  var sourceLabel = sources.getColumnValue(13);
+	  var sourceTable = sources.getColumnValue(14);
+	  var transformation = sources.getColumnValue(15);
 	  var sqlExecuted = '';
 
 	  if (transformation) {transformation = '(' + transformation + ')'} else {transformation = sourceTable}
@@ -330,7 +332,8 @@ try {
 	  }
 
 	  sourceTitle = `\n\n` + '-'.repeat(65)
-		+ `\n-- ` + sourceTable.replace('DATAMART.BUYSIDE_NETWORK.','').replace('DATAMART.SELLSIDE_NETWORK.','')
+		+ `\n-- SOURCE_LABEL: ` + sourceLabel
+		+ `\n-- SOURCE_TABLE: ` + sourceTable.replace('DATAMART.BUYSIDE_NETWORK.','').replace('DATAMART.SELLSIDE_NETWORK.','')
 		+ `\n` + '-'.repeat(65) + `\n`;
 	  sqlScript = sqlScript + sourceTitle + sqlExecuted;
 	}
@@ -370,6 +373,7 @@ try {
 		  d.AGGREGATE_COLUMNS,
 		  d.AGGREGATE_FUNCTIONS,
 		  d.DEFAULT_PROCEDURE,
+		  s.SOURCE_LABEL,
 		  s.SOURCE_TABLE,
 		  s.TRANSFORMATION
 	  FROM DATA_AGGREGATION_TARGETS d
@@ -402,8 +406,9 @@ try {
 	  var measureColumns = sources.getColumnValue(10).map(x => x.split(':')[0]);
 	  var aggregateFunctions = sources.getColumnValue(11);
 	  var defaultProcedure = sources.getColumnValue(12);
-	  var sourceTable = sources.getColumnValue(13);
-	  var transformation = sources.getColumnValue(14);
+	  var sourceLabel = sources.getColumnValue(13);
+	  var sourceTable = sources.getColumnValue(14);
+	  var transformation = sources.getColumnValue(15);
 	  var sqlExecuted = '';
 
 	  if (transformation) {transformation = '(' + transformation + ')'} else {transformation = sourceTable}
@@ -459,7 +464,8 @@ try {
 	  }
 
 	  sourceTitle = `\n\n` + '-'.repeat(65)
-		+ `\n-- ` + sourceTable.replace('DATAMART.BUYSIDE_NETWORK.','').replace('DATAMART.SELLSIDE_NETWORK.','')
+		+ `\n-- SOURCE_LABEL: ` + sourceLabel
+		+ `\n-- SOURCE_TABLE: ` + sourceTable.replace('DATAMART.BUYSIDE_NETWORK.','').replace('DATAMART.SELLSIDE_NETWORK.','')
 		+ `\n` + '-'.repeat(65) + `\n`;
 	  sqlScript = sqlScript + sourceTitle + sqlExecuted;
 	}
@@ -601,9 +607,10 @@ try {
 		});
 	  if (!SCRIPT_ONLY) {callStmt.execute();}
 
-	  loopSegmenter = `\n\n--` + '='.repeat(65)
-		+ `\n-- ` + batchLoopTag.toISOString()
-		+ `\n--` + '='.repeat(65) + `\n`;
+	  loopSegmenter = `\n\n` + '-'.repeat(65)
+		+ `\n-- LOOP FRAME: ` + batchControlColumn + ` = ` + batchLoopTag.toISOString()
+		+ `\n-- LOOP SCOPE: ` + batchControlColumn + ` < ` + batchLoopEnd.toISOString()
+		+ `\n` + '-'.repeat(65) + `\n`;
 	  loopScript = loopScript + loopSegmenter
 		+ removalStmt.getSqlText()
 			.replace(/:1/g, '\'' + batchLoopTag.toISOString() + '\'')
