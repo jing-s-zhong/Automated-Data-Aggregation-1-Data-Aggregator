@@ -1,5 +1,6 @@
 !set variable_substitution=true;
-!define ver=V10;
+!define ver=V12;
+--
 use database &{db_name};
 create schema if not exists &{sc_name};
 --create schema &{sc_name};
@@ -7,6 +8,7 @@ use schema &{sc_name};
 --
 ALTER TABLE IF EXISTS DATA_AGGREGATION_TARGETS RENAME TO _BKBY_&{ver}_DATA_AGGREGATION_TARGETS;
 ALTER TABLE IF EXISTS DATA_AGGREGATION_SOURCES RENAME TO _BKBY_&{ver}_DATA_AGGREGATION_SOURCES;
+ALTER TABLE IF EXISTS DATA_AGGREGATION_LOGGING RENAME TO _BKBY_&{ver}_DATA_AGGREGATION_LOGGING;
 ALTER FUNCTION IF EXISTS DATA_PATTERN(ARRAY) RENAME TO _BKBY_&{ver}_DATA_PATTERN;
 ALTER FUNCTION IF EXISTS COLUMN_MAP(ARRAY) RENAME TO _BKBY_&{ver}_COLUMN_MAP;
 ALTER FUNCTION IF EXISTS REVENUE_SHARE(VARIANT, VARCHAR, FLOAT) RENAME TO _BKBY_&{ver}_REVENUE_SHARE;
@@ -129,6 +131,20 @@ SELECT ID
 	,DATA_CHECKSCHEDULE
 	,TRANSFORMATION
 FROM _BKBY_&{ver}_DATA_AGGREGATION_SOURCES;
+;
+--
+-- DROP TABLE DATA_AGGREGATION_LOGGING;
+--
+CREATE TABLE DATA_AGGREGATION_LOGGING
+(
+	EVENT_ID 					NUMBER NOT NULL DEFAULT DATA_AGGREGATION_LOGGING_SEQ.NEXTVAL,
+	EVENT_TIME	    	        TIMESTAMP_NTZ DEFAULT TO_TIMESTAMP_NTZ(CURRENT_TIMESTAMP),
+	EVENT_TARGET	        	TEXT,
+	EVENT_SOURCE	        	TEXT,
+	EVENT_STATE					TEXT,
+	EVENT_QUERY					TEXT
+)
+COMMENT = 'This tableis used to log the error of running the processing'
 ;
 --
 -------------------------------------------------------
@@ -395,6 +411,14 @@ while (sources.next()) {
 		catch (err) {
 			sqlResult = 'Failure to load data into target table => ' + err
 		}
+		finally {
+			var logQuery = 'INSERT INTO DATA_AGGREGATION_LOGGING(EVENT_TARGET, EVENT_SOURCE, EVENT_STATE, EVENT_QUERY) VALUES(:1, :2, :3, :4)';
+			var logStmt = snowflake.createStatement({
+				sqlText: logQuery,
+				binds: [targetTable, sourceTable, sqlResult, sqlExecuted]
+				});
+			logStmt.execute()
+		}
 	}
   }
   else {
@@ -528,6 +552,14 @@ while (sources.next()) {
 		}
 		catch (err) {
 			sqlResult = 'Failure to load data into target table => ' + err
+		}
+		finally {
+			var logQuery = 'INSERT INTO DATA_AGGREGATION_LOGGING(EVENT_TARGET, EVENT_SOURCE, EVENT_STATE, EVENT_QUERY) VALUES(:1, :2, :3, :4)';
+			var logStmt = snowflake.createStatement({
+				sqlText: logQuery,
+				binds: [targetTable, sourceTable, sqlResult, sqlExecuted]
+				});
+			logStmt.execute()
 		}
 	}
   }

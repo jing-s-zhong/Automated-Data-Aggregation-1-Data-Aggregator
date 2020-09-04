@@ -67,6 +67,24 @@ CLUSTER BY (TARGET_TABLE, SOURCE_TABLE)
 COMMENT = 'This tableis used to register the aggregation sources'
 ;
 --
+-- DROP SEQUENCE DATA_AGGREGATION_LOGGING_SEQ;
+--
+CREATE SEQUENCE DATA_AGGREGATION_LOGGING_SEQ START = 1 INCREMENT = 1;
+--
+-- DROP TABLE DATA_AGGREGATION_LOGGING;
+--
+CREATE TABLE DATA_AGGREGATION_LOGGING
+(
+	EVENT_ID 					NUMBER NOT NULL DEFAULT DATA_AGGREGATION_LOGGING_SEQ.NEXTVAL,
+	EVENT_TIME	    	        TIMESTAMP_NTZ DEFAULT TO_TIMESTAMP_NTZ(CURRENT_TIMESTAMP),
+	EVENT_TARGET	        	TEXT,
+	EVENT_SOURCE	        	TEXT,
+	EVENT_STATE					TEXT,
+	EVENT_QUERY					TEXT
+)
+COMMENT = 'This tableis used to log the error of running the processing'
+;
+--
 -------------------------------------------------------
 -- Create assisstant functions
 -------------------------------------------------------
@@ -330,6 +348,14 @@ while (sources.next()) {
 		catch (err) {
 			sqlResult = 'Failure to load data into target table => ' + err
 		}
+		finally {
+			var logQuery = 'INSERT INTO DATA_AGGREGATION_LOGGING(EVENT_TARGET, EVENT_SOURCE, EVENT_STATE, EVENT_QUERY) VALUES(:1, :2, :3, :4)';
+			var logStmt = snowflake.createStatement({
+				sqlText: logQuery,
+				binds: [targetTable, sourceTable, sqlResult, sqlExecuted]
+				});
+			logStmt.execute()
+		}
 	}
   }
   else {
@@ -463,6 +489,14 @@ while (sources.next()) {
 		}
 		catch (err) {
 			sqlResult = 'Failure to load data into target table => ' + err
+		}
+		finally {
+			var logQuery = 'INSERT INTO DATA_AGGREGATION_LOGGING(EVENT_TARGET, EVENT_SOURCE, EVENT_STATE, EVENT_QUERY) VALUES(:1, :2, :3, :4)';
+			var logStmt = snowflake.createStatement({
+				sqlText: logQuery,
+				binds: [targetTable, sourceTable, sqlResult, sqlExecuted]
+				});
+			logStmt.execute()
 		}
 	}
   }
