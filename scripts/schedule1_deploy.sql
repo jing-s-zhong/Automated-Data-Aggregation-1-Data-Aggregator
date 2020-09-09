@@ -3,7 +3,6 @@ use database &{db_name};
 create schema if not exists &{sc_name};
 --create schema &{sc_name};
 use schema &{sc_name};
-!set variable_substitution=false;
 --
 -------------------------------------------------------
 -- Create task management tables
@@ -85,6 +84,7 @@ CREATE TABLE DATA_AGGREGATION_LOGGING
 COMMENT = 'This tableis used to log the error of running the processing'
 ;
 --
+!set variable_substitution=false;
 -------------------------------------------------------
 -- Create assisstant functions
 -------------------------------------------------------
@@ -232,18 +232,19 @@ $$;
 -------------------------------------------------------
 --
 -- Aggregate generation stored procedues for indivual source
--- DROP PROCEDURE DATA_AGGREGATOR(STRING, STRING, BOOLEAN, BOOLEAN);
+-- DROP PROCEDURE DATA_AGGREGATOR(VARCHAR, BOOLEAN, BOOLEAN, BOOLEAN, VARCHAR);
 CREATE PROCEDURE  DATA_AGGREGATOR (
 	TARGET_TABLE VARCHAR,
-	BATCH_TIMETAG VARCHAR,
 	SCRIPT_ONLY BOOLEAN,
-	NOT_ENABLED BOOLEAN
+	LOG_DETAILS BOOLEAN,
+	NON_ENABLED BOOLEAN,
+	BATCH_TIMETAG VARCHAR
 	)
-RETURNS STRING
+RETURNS VARCHAR
 LANGUAGE JAVASCRIPT STRICT
 AS
 $$
-var sqlScript = '';
+var sqlScript = '', pageBreaker = '';
 
 var sourceQuery = `SELECT
 	  d.TARGET_TABLE,
@@ -269,7 +270,7 @@ var sourceQuery = `SELECT
 
 var sourceStmt = snowflake.createStatement({
   sqlText: sourceQuery,
-  binds: [TARGET_TABLE, NOT_ENABLED]
+  binds: [TARGET_TABLE, NON_ENABLED]
   });
 
 var sources = sourceStmt.execute();
@@ -333,28 +334,29 @@ while (sources.next()) {
 		+ `VALUES (` + groupByList.split(',').map(x=>{return sourceAlias[0] + `.` +  x}) + `,`
 					 + aggregateColumns.map(x=>{return sourceAlias[0] + `.` +  x}) + `);`;
 
-	var loadStmt = snowflake.createStatement({
-		sqlText: loadQuery,
-		binds: [BATCH_TIMETAG, batchControlSize]
-		});
-
-	sqlExecuted = loadStmt.getSqlText().replace(/:1/g, "'" + BATCH_TIMETAG + "'").replace(/:2/g, batchControlSize);
+	sqlExecuted = loadQuery.replace(/:2/g, batchControlSize).replace(/:1/g, "'" + BATCH_TIMETAG + "'");
 	
 	if (!SCRIPT_ONLY) {
 		try {
+			var loadStmt = snowflake.createStatement({
+				sqlText: loadQuery,
+				binds: [BATCH_TIMETAG, batchControlSize]
+				});
 			loadStmt.execute();
-			sqlResult = 'Successfully loaded data into target table'
+			sqlResult = '[INFO-1] Successfully loaded data into target table'
 		}
 		catch (err) {
-			sqlResult = 'Failure to load data into target table => ' + err
+			sqlResult = '[ERROR] Failure to load data into target table => ' + err
 		}
 		finally {
-			var logQuery = 'INSERT INTO DATA_AGGREGATION_LOGGING(EVENT_TARGET, EVENT_SOURCE, EVENT_STATE, EVENT_QUERY) VALUES(:1, :2, :3, :4)';
-			var logStmt = snowflake.createStatement({
-				sqlText: logQuery,
-				binds: [targetTable, sourceTable, sqlResult, sqlExecuted]
-				});
-			logStmt.execute()
+			if (LOG_DETAILS || sqlResult.startsWith('[ERROR]')) {
+				var logQuery = 'INSERT INTO DATA_AGGREGATION_LOGGING(EVENT_TARGET, EVENT_SOURCE, EVENT_STATE, EVENT_QUERY) VALUES(:1, :2, :3, :4)';
+				var logStmt = snowflake.createStatement({
+					sqlText: logQuery,
+					binds: [targetTable, sourceTable, sqlResult, sqlExecuted]
+					});
+				logStmt.execute()
+			}
 		}
 	}
   }
@@ -362,170 +364,32 @@ while (sources.next()) {
 	sqlExecuted = '-- No data is loaded from this source as the data pattern is incompatible!';
   }
 
-  sourceTitle = `\n\n` + '-'.repeat(65)
+  sourceTitle = pageBreaker + '-'.repeat(65)
 	+ `\n-- SOURCE_LABEL: ` + sourceLabel
 	+ `\n-- SOURCE_TABLE: ` + sourceTable.replace('DATAMART.BUYSIDE_NETWORK.','').replace('DATAMART.SELLSIDE_NETWORK.','')
 	+ `\n-- SOURCE STATE: ` + sqlResult
 	+ `\n` + '-'.repeat(65) + `\n`;
   sqlScript = sqlScript + sourceTitle + sqlExecuted;
-}
-
-return sqlScript;
-$$;
---
--- Aggregate generation stored procedues for indivual source
--- DROP PROCEDURE DATA_AGGREGATOR(STRING, STRING, BOOLEAN);
---
-CREATE PROCEDURE  DATA_AGGREGATOR (
-	TARGET_TABLE STRING,
-	BATCH_TIMETAG STRING,
-	SCRIPT_ONLY BOOLEAN
-	)
-RETURNS STRING
-LANGUAGE JAVASCRIPT STRICT
-AS
-$$
-var sqlScript = '';
-
-var sourceQuery = `SELECT
-	  d.TARGET_TABLE,
-	  d.BATCH_CONTROL_COLUMN,
-	  d.BATCH_CONTROL_SIZE,
-	  d.BATCH_CONTROL_NEXT,
-	  d.PATTERN_COLUMNS,
-	  d.GROUPBY_COLUMNS,
-	  CASE WHEN GROUPBY_FLEXIBLE THEN BITOR(d.GROUPBY_PATTERN, s.PATTERN_DEFAULT) ELSE d.GROUPBY_PATTERN END GROUPBY_PATTERN,
-	  d.GROUPBY_FLEXIBLE OR (d.GROUPBY_PATTERN = BITOR(d.GROUPBY_PATTERN, s.PATTERN_DEFAULT)) GROUPBY_COMPITABLE,
-	  d.GROUPBY_FLEXIBLE AND s.PATTERN_FLEXIBLE PATTERN_FLEXIBLE,
-	  d.AGGREGATE_COLUMNS,
-	  d.AGGREGATE_FUNCTIONS,
-	  d.DEFAULT_PROCEDURE,
-	  s.SOURCE_LABEL,
-	  s.SOURCE_TABLE,
-	  s.TRANSFORMATION
-  FROM DATA_AGGREGATION_TARGETS d
-  JOIN DATA_AGGREGATION_SOURCES s
-  USING(TARGET_TABLE)
-  WHERE s.SOURCE_ENABLED = True
-	AND d.TARGET_TABLE = :1;`;
-
-var sourceStmt = snowflake.createStatement({
-  sqlText: sourceQuery,
-  binds: [TARGET_TABLE]
-  });
-
-var sources = sourceStmt.execute();
-
-// loop each source
-while (sources.next()) {
-  var targetTable = sources.getColumnValue(1);
-  var batchControlColumn = sources.getColumnValue(2);
-  var batchControlSize = sources.getColumnValue(3);
-  var batchControlNext = sources.getColumnValue(4);
-  var patternColumns = sources.getColumnValue(5);
-  var groupByColumns = sources.getColumnValue(6).map(x => x.split(':')[1]);
-  var dimensionColumns = sources.getColumnValue(6).map(x => x.split(':')[0]);
-  var groupByPattern = sources.getColumnValue(7);
-  var groupByCompitable = sources.getColumnValue(8);
-  var patternFlexible = sources.getColumnValue(9);
-  var aggregateColumns = sources.getColumnValue(10).map(x => x.split(':')[1]);
-  var measureColumns = sources.getColumnValue(10).map(x => x.split(':')[0]);
-  var aggregateFunctions = sources.getColumnValue(11);
-  var defaultProcedure = sources.getColumnValue(12);
-  var sourceLabel = sources.getColumnValue(13);
-  var sourceTable = sources.getColumnValue(14);
-  var transformation = sources.getColumnValue(15);
-  var sourceTitle = '', sqlExecuted = '', sqlResult = '(SP call parameter script_only is presented true)';
-
-  if (transformation) {transformation = '(' + transformation + ')'} else {transformation = sourceTable}
-
-  if (groupByCompitable) {
-	var flagIndexLast = patternColumns.length - 1,
-		patternSegment = groupByPattern;
-	var selectList = groupByColumns[0] === "DATA_PATTERN" ? (patternFlexible ? 'BITOR(' + groupByColumns[0] + ',' + groupByPattern + ')' : groupByPattern) + ' ' : '',
-		dimensionList = '',
-		groupByList = '',
-		columnSplitter = '';
-	for (var i = 0; i <= flagIndexLast; i++) {
-	  var flagPower = 2 ** (flagIndexLast - i);
-	  if (patternSegment / flagPower < 1) {
-		dimensionList = dimensionList + columnSplitter + dimensionColumns[groupByColumns.indexOf(patternColumns[i])];
-		selectList = selectList + columnSplitter + patternColumns[i];
-		groupByList = groupByList + columnSplitter + patternColumns[i];
-		columnSplitter = ',';
-	  }
-	  patternSegment %= flagPower;
-	}
-
-	var targetAlias = 'T.', sourceAlias = 'S.';
-	var loadQuery = `MERGE INTO ` + targetTable + ` ` + targetAlias[0] + ` \n`
-		+ `USING ( \n`
-		+ `  SELECT ` + groupByList + `,`
-				+ aggregateFunctions.map((x,i)=>{return x.replace('?', aggregateColumns[i]) + ' ' + aggregateColumns[i]}) + ` \n`
-		+ `  FROM ( \n`
-		+ `    SELECT ` + selectList + `,` + aggregateColumns + ` \n`
-		+ `    FROM ` + transformation + ` \n`
-		+ `    WHERE ` + batchControlColumn + ` >= :1 AND ` + batchControlColumn + ` < ` + batchControlNext + ` \n`
-		+ `    ) \n`
-		+ `  GROUP BY ` + groupByList + `\n`
-		+ `  ) ` + sourceAlias[0] + ` \n`
-		+ `ON ` + dimensionList.split(',').map((x,i)=>{return `COALESCE(TO_CHAR(` + targetAlias + x + `),'') = COALESCE(TO_CHAR(` + sourceAlias + groupByList.split(',')[i] + `),'')`}).join('\n AND ') + ` \n`
-		+ `WHEN MATCHED THEN UPDATE SET ` + measureColumns.map((x,i) =>{return x + ' = ' + sourceAlias[0] + `.` + aggregateColumns[i]}) + ` \n`
-		+ `WHEN NOT MATCHED THEN INSERT(` + dimensionList + `,` + measureColumns + `) \n`
-		+ `VALUES (` + groupByList.split(',').map(x=>{return sourceAlias[0] + `.` +  x}) + `,`
-					 + aggregateColumns.map(x=>{return sourceAlias[0] + `.` +  x}) + `);`;
-
-	var loadStmt = snowflake.createStatement({
-		sqlText: loadQuery,
-		binds: [BATCH_TIMETAG, batchControlSize]
-		});
-
-	sqlExecuted = loadStmt.getSqlText().replace(/:1/g, "'" + BATCH_TIMETAG + "'").replace(/:2/g, batchControlSize);
-	
-	if (!SCRIPT_ONLY) {
-		try {
-			loadStmt.execute();
-			sqlResult = 'Successfully loaded data into target table'
-		}
-		catch (err) {
-			sqlResult = 'Failure to load data into target table => ' + err
-		}
-		finally {
-			var logQuery = 'INSERT INTO DATA_AGGREGATION_LOGGING(EVENT_TARGET, EVENT_SOURCE, EVENT_STATE, EVENT_QUERY) VALUES(:1, :2, :3, :4)';
-			var logStmt = snowflake.createStatement({
-				sqlText: logQuery,
-				binds: [targetTable, sourceTable, sqlResult, sqlExecuted]
-				});
-			logStmt.execute()
-		}
-	}
-  }
-  else {
-	sqlExecuted = '-- No data is loaded from this source as a data pattern compatible issue!';
-  }
-
-  sourceTitle = `\n\n` + '-'.repeat(65)
-	+ `\n-- SOURCE_LABEL: ` + sourceLabel
-	+ `\n-- SOURCE_TABLE: ` + sourceTable.replace('DATAMART.BUYSIDE_NETWORK.','').replace('DATAMART.SELLSIDE_NETWORK.','')
-	+ `\n-- SOURCE STATE: ` + sqlResult
-	+ `\n` + '-'.repeat(65) + `\n`;
-  sqlScript = sqlScript + sourceTitle + sqlExecuted;
+  pageBreaker = `\n\n`;
 }
 
 return sqlScript;
 $$;
 --
 -- Aggregate stored procedues to loop all available source tables
--- DROP PROCEDURE DATA_AGGREGATOR(STRING, BOOLEAN);
+-- DROP PROCEDURE DATA_AGGREGATOR(VARCHAR, BOOLEAN, BOOLEAN);
 --
 CREATE PROCEDURE DATA_AGGREGATOR (
-	TARGET_TABLE STRING,
-	SCRIPT_ONLY BOOLEAN
+	TARGET_TABLE VARCHAR,
+	SCRIPT_ONLY BOOLEAN,
+	LOG_DETAILS BOOLEAN
 	)
-RETURNS STRING
+RETURNS VARCHAR
 LANGUAGE JAVASCRIPT STRICT
 AS
 $$
+var	NON_ENABLED = 0;
+
 var batchControlColumn  = '',
 	batchControlSize = 0,
 	batchControlType  = '',
@@ -533,7 +397,9 @@ var batchControlColumn  = '',
 	batchLoopEnd = '',
 	batchScheduleCurrent;
 var loopScript = '',
-	loopSegmenter = '';
+	pageBreaker = '',
+	loopSegmenter = '',
+	callResult = '(SP call parameter script_only is presented true)';
 
 //
 // Detect runable or not
@@ -626,34 +492,82 @@ while (batchLoopTag <= batchLoopEnd) {
 	});
   if (!SCRIPT_ONLY) {contextStmt.execute();}
 
-  var removalQuery = `DELETE FROM ` + TARGET_TABLE
+  var deleteQuery = `DELETE FROM ` + TARGET_TABLE
 	  + ` WHERE ` + batchControlColumn + ` >= :1`
 	  + ` AND ` + batchControlColumn + ` < DATEADD(MINUTE, :2, :1);\n`;
-  var removalStmt = snowflake.createStatement({
-	  sqlText: removalQuery,
-	  binds: [batchLoopTag.toISOString(), batchControlSize]
-	  });
-  if (!SCRIPT_ONLY) {removalStmt.execute();}
+  var deleteScheduled = deleteQuery
+	.replace(/:2/g, batchControlSize.toString())
+	.replace(/:1/g, '\'' + batchLoopTag.toISOString() + '\'');
 
-  var callQuery = 'CALL DATA_AGGREGATOR (:1, :2, :3);';
-  var callStmt = snowflake.createStatement({
-	sqlText: callQuery,
-	binds: [TARGET_TABLE, batchLoopTag.toISOString(), SCRIPT_ONLY]
-	});
-  if (!SCRIPT_ONLY) {callStmt.execute();}
+  var callQuery = `CALL DATA_AGGREGATOR (:1, :2, :3, :4, :5);\n`;
+  var callScheduled = callQuery
+	.replace(/:1/g, '\'' + TARGET_TABLE + '\'')
+	.replace(/:2/g, SCRIPT_ONLY.toString())
+	.replace(/:3/g, LOG_DETAILS.toString())
+	.replace(/:4/g, NON_ENABLED.toString())
+	.replace(/:5/g, '\'' + batchLoopTag.toISOString() + '\'');
 
-  loopSegmenter = `\n\n` + '-'.repeat(65)
+  if (!SCRIPT_ONLY) {
+	try {
+		var removalStmt = snowflake.createStatement({
+			  sqlText: deleteQuery,
+			  binds: [batchLoopTag.toISOString(), batchControlSize]
+		  });
+		removalStmt.execute();
+		callResult = '[INFO-1] Successfully deleted the existing data for reloading';
+	}
+	catch (err) {
+		callResult = '[ERROR] Failure to delete the existing data from target table => ' + err
+	}
+	finally {
+		if (LOG_DETAILS || callResult.startsWith('[ERROR]')) {
+			var logQuery = 'INSERT INTO DATA_AGGREGATION_LOGGING(EVENT_TARGET, EVENT_SOURCE, EVENT_STATE, EVENT_QUERY) VALUES(:1, :2, :3, :4)';
+			var logStmt = snowflake.createStatement({
+				sqlText: logQuery,
+				binds: [TARGET_TABLE, '(*** All loaded data covered by current batch ***)', callResult, deleteScheduled]
+				});
+			logStmt.execute()
+		}
+	}
+  
+	if (LOG_DETAILS) {
+		var logQuery = 'INSERT INTO DATA_AGGREGATION_LOGGING(EVENT_TARGET, EVENT_SOURCE, EVENT_STATE, EVENT_QUERY) VALUES(:1, :2, :3, :4)';
+		var logStmt = snowflake.createStatement({
+			sqlText: logQuery,
+			binds: [TARGET_TABLE, '(*** All enabled data sources ***)', '[INFO-2] Make a batch data load call', callScheduled]
+			});
+		logStmt.execute()
+	}
+	
+	try {
+		var callStmt = snowflake.createStatement({
+			sqlText: callQuery,
+			binds: [TARGET_TABLE, SCRIPT_ONLY.toString(), LOG_DETAILS.toString(), NON_ENABLED.toString(), batchLoopTag.toISOString()]
+		});
+		callStmt.execute();
+		callResult = '[INFO-2] Successfully completed the batch load call';
+	}
+	catch (err) {
+		callResult = '[ERROR] Failure to complete the batch load call => ' + err
+	}
+	finally {
+		if (LOG_DETAILS || callResult.startsWith('[ERROR]')) {
+			var logQuery = 'INSERT INTO DATA_AGGREGATION_LOGGING(EVENT_TARGET, EVENT_SOURCE, EVENT_STATE, EVENT_QUERY) VALUES(:1, :2, :3, :4)';
+			var logStmt = snowflake.createStatement({
+				sqlText: logQuery,
+				binds: [TARGET_TABLE, '', callResult, callScheduled]
+				});
+			logStmt.execute()
+		}
+	}
+  }
+
+  loopSegmenter = pageBreaker + '-'.repeat(65)
 	+ `\n-- LOOP FRAME: ` + batchControlColumn + ` = ` + batchLoopTag.toISOString()
-	+ `\n-- LOOP SCOPE: ` + batchControlColumn + ` < ` + batchLoopEnd.toISOString()
+	+ `\n-- LOOP CHUNK: ` + batchControlSize.toString() + ` minutes by ` + batchControlColumn
 	+ `\n` + '-'.repeat(65) + `\n`;
-  loopScript = loopScript + loopSegmenter
-	+ removalStmt.getSqlText()
-		.replace(/:1/g, '\'' + batchLoopTag.toISOString() + '\'')
-		.replace(/:2/g, '\'' + batchControlSize + '\'')
-	+ callStmt.getSqlText()
-		.replace(/:1/g, '\'' + TARGET_TABLE + '\'')
-		.replace(/:2/g, '\'' + batchLoopTag.toISOString() + '\'')
-		.replace(/:3/g, + SCRIPT_ONLY.toString());
+  loopScript = loopScript + loopSegmenter + deleteScheduled + callScheduled;
+  pageBreaker = `\n\n`;
 
   batchLoopTag.setMinutes(batchLoopTag.getMinutes() + batchControlSize);
 }
