@@ -1,5 +1,5 @@
 !set variable_substitution=true;
-!define ver=V13;
+!define ver=V20;
 --
 use database &{db_name};
 create schema if not exists &{sc_name};
@@ -28,9 +28,9 @@ ALTER PROCEDURE IF EXISTS DATA_AGGREGATOR(VARCHAR, BOOLEAN, BOOLEAN) RENAME TO _
 --
 CREATE TABLE DATA_AGGREGATION_TARGETS
 (
-	ID 							NUMBER NOT NULL DEFAULT DATA_AGGREGATION_TARGETS_SEQ.NEXTVAL,
+	TARGET_ID 					NUMBER NOT NULL DEFAULT DATA_AGGREGATION_TARGETS_SEQ.NEXTVAL,
 	TARGET_LABEL				TEXT,
-	TARGET_TABLE				TEXT NOT NULL,
+	TARGET_DATA					TEXT NOT NULL,
 	BATCH_CONTROL_COLUMN		TEXT,
 	BATCH_CONTROL_SIZE			NUMBER,
 	BATCH_CONTROL_NEXT			TEXT,
@@ -45,15 +45,15 @@ CREATE TABLE DATA_AGGREGATION_TARGETS
 	GROUPBY_FLEXIBLE			BOOLEAN,
 	AGGREGATE_COLUMNS			ARRAY,
 	AGGREGATE_FUNCTIONS			ARRAY,
-	DEFAULT_PROCEDURE			TEXT,
-	CONSTRAINT PK_DATA_AGGREGATION_TARGETS PRIMARY KEY (TARGET_TABLE)
+	SUPPORT_SP_VERSIONS			ARRAY,
+	CONSTRAINT PK_DATA_AGGREGATION_TARGETS PRIMARY KEY (TARGET_ID)
 )
-CLUSTER BY (TARGET_TABLE)
+CLUSTER BY (TARGET_DATA)
 COMMENT = 'This tableis used to register the aggregation targets'
 ;
-INSERT INTO DATA_AGGREGATION_TARGETS (ID
+INSERT INTO DATA_AGGREGATION_TARGETS (TARGET_ID
 	,TARGET_LABEL
-	,TARGET_TABLE
+	,TARGET_DATA
 	,BATCH_CONTROL_COLUMN
 	,BATCH_CONTROL_SIZE
 	,BATCH_CONTROL_NEXT
@@ -68,9 +68,9 @@ INSERT INTO DATA_AGGREGATION_TARGETS (ID
 	,GROUPBY_FLEXIBLE
 	,AGGREGATE_COLUMNS
 	,AGGREGATE_FUNCTIONS
-	,DEFAULT_PROCEDURE
+	,SUPPORT_SP_VERSIONS
 	)
-SELECT ID
+SELECT ID TARGET_ID
 	,TARGET_LABEL
 	,TARGET_TABLE
 	,BATCH_CONTROL_COLUMN
@@ -87,7 +87,7 @@ SELECT ID
 	,GROUPBY_FLEXIBLE
 	,AGGREGATE_COLUMNS
 	,AGGREGATE_FUNCTIONS
-	,DEFAULT_PROCEDURE
+	,ARRAY_CONSTRUCT('V20')
 FROM _BKBY_&{ver}_DATA_AGGREGATION_TARGETS
 ;
 --
@@ -99,45 +99,50 @@ FROM _BKBY_&{ver}_DATA_AGGREGATION_TARGETS
 --
 CREATE TABLE DATA_AGGREGATION_SOURCES
 (
-	ID 							NUMBER NOT NULL DEFAULT DATA_AGGREGATION_SOURCES_SEQ.NEXTVAL,
+	SOURCE_ID 					NUMBER NOT NULL DEFAULT DATA_AGGREGATION_SOURCES_SEQ.NEXTVAL,
+	TARGET_ID	        		NUMBER NOT NULL,
 	SOURCE_LABEL				TEXT,
-	TARGET_TABLE	        	TEXT NOT NULL,
-	SOURCE_TABLE	        	TEXT NOT NULL,
+	SOURCE_DATA	        		TEXT NOT NULL,
 	SOURCE_ENABLED	        	BOOLEAN,
+	SOURCE_READY_TIME	    	TIMESTAMP_NTZ,
+	SOURCE_CHECK_TIME	    	TIMESTAMP_NTZ,
+	SOURCE_CHECK_QUERY	        TEXT,
 	PATTERN_DEFAULT	        	NUMBER,
 	PATTERN_FLEXIBLE	    	BOOLEAN,
-	DATA_AVAILABLETIME	    	TIMESTAMP_NTZ,
-	DATA_CHECKSCHEDULE	    	TIMESTAMP_NTZ,
 	TRANSFORMATION	        	TEXT,
-	CONSTRAINT PK_DATA_AGGREGATION_SOURCES PRIMARY KEY (TARGET_TABLE, SOURCE_TABLE),
-	CONSTRAINT FK_DATA_AGGREGATION_SOURCES_TARGET_TABLE FOREIGN KEY (TARGET_TABLE)
-		REFERENCES DATA_AGGREGATION_TARGETS(TARGET_TABLE)
+	CONSTRAINT PK_DATA_AGGREGATION_SOURCES PRIMARY KEY (SOURCE_ID),
+	CONSTRAINT FK_DATA_AGGREGATION_SOURCES_TARGET_DATA FOREIGN KEY (TARGET_ID)
+		REFERENCES DATA_AGGREGATION_TARGETS(TARGET_ID)
 )
-CLUSTER BY (TARGET_TABLE, SOURCE_TABLE)
+CLUSTER BY (TARGET_ID, SOURCE_DATA)
 COMMENT = 'This tableis used to register the aggregation sources'
 ;
-INSERT INTO DATA_AGGREGATION_SOURCES (ID
+INSERT INTO DATA_AGGREGATION_SOURCES (SOURCE_ID
+	,TARGET_ID
 	,SOURCE_LABEL
-	,TARGET_TABLE
-	,SOURCE_TABLE
+	,SOURCE_DATA
 	,SOURCE_ENABLED
+	,SOURCE_READY_TIME
+	,SOURCE_CHECK_TIME
+	,SOURCE_CHECK_QUERY
 	,PATTERN_DEFAULT
 	,PATTERN_FLEXIBLE
-	,DATA_AVAILABLETIME
-	,DATA_CHECKSCHEDULE
 	,TRANSFORMATION
 	)
-SELECT ID
-	,SOURCE_LABEL
-	,TARGET_TABLE
-	,SOURCE_TABLE
-	,SOURCE_ENABLED
-	,PATTERN_DEFAULT
-	,PATTERN_FLEXIBLE
-	,DATA_AVAILABLETIME
-	,DATA_CHECKSCHEDULE
-	,TRANSFORMATION
-FROM _BKBY_&{ver}_DATA_AGGREGATION_SOURCES;
+SELECT A.ID SOURCE_ID
+	,B.ID TARGET_ID
+	,A.SOURCE_LABEL
+	,A.SOURCE_TABLE
+	,A.SOURCE_ENABLED
+	,A.DATA_AVAILABLETIME
+	,A.DATA_CHECKSCHEDULE
+	,NULL SOURCE_CHECK_QUERY
+	,A.PATTERN_DEFAULT
+	,A.PATTERN_FLEXIBLE
+	,A.TRANSFORMATION
+FROM _BKBY_&{ver}_DATA_AGGREGATION_SOURCES A
+JOIN _BKBY_&{ver}_DATA_AGGREGATION_TARGETS B
+ON A.TARGET_TABLE = B.TARGET_TABLE
 ;
 --
 -- DROP SEQUENCE DATA_AGGREGATION_LOGGING_SEQ;
@@ -152,6 +157,7 @@ CREATE TABLE DATA_AGGREGATION_LOGGING
 	EVENT_TIME	    	        TIMESTAMP_NTZ DEFAULT TO_TIMESTAMP_NTZ(CURRENT_TIMESTAMP),
 	EVENT_TARGET	        	TEXT,
 	EVENT_SOURCE	        	TEXT,
+	EVENT_STATUS				TEXT,
 	EVENT_STATE					TEXT,
 	EVENT_QUERY					TEXT
 )
@@ -308,7 +314,7 @@ $$;
 -- Aggregate generation stored procedues for indivual source
 -- DROP PROCEDURE DATA_AGGREGATOR(VARCHAR, BOOLEAN, BOOLEAN, BOOLEAN, VARCHAR);
 CREATE PROCEDURE  DATA_AGGREGATOR (
-	TARGET_TABLE VARCHAR,
+	TARGET_DATA VARCHAR,
 	SCRIPT_ONLY BOOLEAN,
 	LOG_DETAILS BOOLEAN,
 	NON_ENABLED BOOLEAN,
@@ -321,7 +327,7 @@ $$
 var sqlScript = '', pageBreaker = '';
 
 var sourceQuery = `SELECT
-	  d.TARGET_TABLE,
+	  d.TARGET_DATA,
 	  d.BATCH_CONTROL_COLUMN,
 	  d.BATCH_CONTROL_SIZE,
 	  d.BATCH_CONTROL_NEXT,
@@ -332,26 +338,26 @@ var sourceQuery = `SELECT
 	  d.GROUPBY_FLEXIBLE AND s.PATTERN_FLEXIBLE PATTERN_FLEXIBLE,
 	  d.AGGREGATE_COLUMNS,
 	  d.AGGREGATE_FUNCTIONS,
-	  d.DEFAULT_PROCEDURE,
+	  d.SUPPORT_SP_VERSIONS,
 	  s.SOURCE_LABEL,
-	  s.SOURCE_TABLE,
+	  s.SOURCE_DATA,
 	  s.TRANSFORMATION
   FROM DATA_AGGREGATION_TARGETS d
   JOIN DATA_AGGREGATION_SOURCES s
-  USING(TARGET_TABLE)
-  WHERE d.TARGET_TABLE = :1
+  USING(TARGET_ID)
+  WHERE d.TARGET_DATA = :1
 	AND s.SOURCE_ENABLED != :2;`;
 
 var sourceStmt = snowflake.createStatement({
 	sqlText: sourceQuery,
-	binds: [TARGET_TABLE, NON_ENABLED]
+	binds: [TARGET_DATA, NON_ENABLED]
 });
 
 var sources = sourceStmt.execute();
 
 // loop each source
 while (sources.next()) {
-	var targetTable = sources.getColumnValue(1);
+	var targetData = sources.getColumnValue(1);
 	var batchControlColumn = sources.getColumnValue(2);
 	var batchControlSize = sources.getColumnValue(3);
 	var batchControlNext = sources.getColumnValue(4);
@@ -364,13 +370,16 @@ while (sources.next()) {
 	var aggregateColumns = sources.getColumnValue(10).map(x => x.split(':')[1]);
 	var measureColumns = sources.getColumnValue(10).map(x => x.split(':')[0]);
 	var aggregateFunctions = sources.getColumnValue(11);
-	var defaultProcedure = sources.getColumnValue(12);
+	var supportSpVersions = sources.getColumnValue(12);
 	var sourceLabel = sources.getColumnValue(13);
-	var sourceTable = sources.getColumnValue(14);
+	var sourceData = sources.getColumnValue(14);
 	var transformation = sources.getColumnValue(15);
-	var sourceTitle = '', sqlExecuted = '', sqlResult = '(SP call parameter script_only is presented true)';
+	var sourceTitle = '',
+		sqlExecuted = '',
+		sqlStatus = '',
+		sqlResult = '(SP call parameter script_only is presented true)';
 
-	if (transformation) { transformation = '(' + transformation + ')' } else { transformation = sourceTable }
+	if (transformation) { transformation = '(' + transformation + ')' } else { transformation = sourceData }
 
 	if (groupByCompitable) {
 		var flagIndexLast = patternColumns.length - 1,
@@ -391,7 +400,7 @@ while (sources.next()) {
 		}
 
 		var targetAlias = 'T.', sourceAlias = 'S.';
-		var loadQuery = `MERGE INTO ` + targetTable + ` ` + targetAlias[0] + ` \n`
+		var loadQuery = `MERGE INTO ` + targetData + ` ` + targetAlias[0] + ` \n`
 			+ `USING ( \n`
 			+ `  SELECT ` + groupByList + `,`
 			+ aggregateFunctions.map((x, i) => { return x.replace('?', aggregateColumns[i]) + ' ' + aggregateColumns[i] }) + ` \n`
@@ -417,17 +426,19 @@ while (sources.next()) {
 					binds: [BATCH_TIMETAG, batchControlSize]
 				});
 				loadStmt.execute();
+				sqlStatus = 'PASS';
 				sqlResult = '[INFO-1] Successfully loaded data into target table'
 			}
 			catch (err) {
-				sqlResult = '[ERROR] Failure to load data into target table => ' + err
+				sqlStatus = 'FAIL';
+				sqlResult = '[FAIL] Failure to load data into target table => ' + err
 			}
 			finally {
-				if (LOG_DETAILS || sqlResult.startsWith('[ERROR]')) {
-					var logQuery = 'INSERT INTO DATA_AGGREGATION_LOGGING(EVENT_TARGET, EVENT_SOURCE, EVENT_STATE, EVENT_QUERY) VALUES(:1, :2, :3, :4)';
+				if (LOG_DETAILS || sqlStatus.startsWith('FAIL')) {
+					var logQuery = 'INSERT INTO DATA_AGGREGATION_LOGGING(EVENT_TARGET, EVENT_SOURCE, EVENT_STATUS, EVENT_STATE, EVENT_QUERY) VALUES(:1, :2, :3, :4, :5)';
 					var logStmt = snowflake.createStatement({
 						sqlText: logQuery,
-						binds: [targetTable, sourceTable, sqlResult, sqlExecuted]
+						binds: [targetData, sourceData, sqlStatus, sqlResult, sqlExecuted]
 					});
 					logStmt.execute()
 				}
@@ -440,7 +451,7 @@ while (sources.next()) {
 
 	sourceTitle = pageBreaker + '-'.repeat(65)
 		+ `\n-- SOURCE_LABEL: ` + sourceLabel
-		+ `\n-- SOURCE_TABLE: ` + sourceTable.replace('DATAMART.BUYSIDE_NETWORK.', '').replace('DATAMART.SELLSIDE_NETWORK.', '')
+		+ `\n-- SOURCE_DATA: ` + sourceData.replace('DATAMART.BUYSIDE_NETWORK.', '').replace('DATAMART.SELLSIDE_NETWORK.', '')
 		+ `\n-- SOURCE STATE: ` + sqlResult
 		+ `\n` + '-'.repeat(65) + `\n`;
 	sqlScript = sqlScript + sourceTitle + sqlExecuted;
@@ -454,7 +465,7 @@ $$;
 -- DROP PROCEDURE DATA_AGGREGATOR(VARCHAR, BOOLEAN, BOOLEAN);
 --
 CREATE PROCEDURE DATA_AGGREGATOR (
-	TARGET_TABLE VARCHAR,
+	TARGET_DATA VARCHAR,
 	SCRIPT_ONLY BOOLEAN,
 	LOG_DETAILS BOOLEAN
 	)
@@ -473,6 +484,7 @@ var batchControlColumn = '',
 var loopScript = '',
 	pageBreaker = '',
 	loopSegmenter = '',
+	callStatus = '',
 	callResult = '(SP call parameter script_only is presented true)';
 
 //
@@ -514,7 +526,7 @@ FROM (
 		BATCH_SCHEDULE_LAST,
 		CURRENT_TIMESTAMP() BATCH_SCHEDULE_CURRENT
 	FROM DATA_AGGREGATION_TARGETS
-	WHERE TARGET_TABLE = :1
+	WHERE TARGET_DATA = :1
 	)
   )
 WHERE BATCH_PROCESSING IS NULL
@@ -522,7 +534,7 @@ OR DATEDIFF(MINUTE, BATCH_SCHEDULE_LAST, BATCH_POSSIBLE) > BATCH_CONTROL_SIZE;`;
 
 var targetStmt = snowflake.createStatement({
 	sqlText: targetQuery,
-	binds: [TARGET_TABLE]
+	binds: [TARGET_DATA]
 });
 
 var target = targetStmt.execute();
@@ -545,10 +557,10 @@ else {
 var contextQuery = `UPDATE DATA_AGGREGATION_TARGETS \n `
 	+ `SET BATCH_PROCESSING = :2, \n\t `
 	+ `BATCH_SCHEDULE_LAST = :3 \n`
-	+ `WHERE TARGET_TABLE = :1;`;
+	+ `WHERE TARGET_DATA = :1;`;
 var contextStmt = snowflake.createStatement({
 	sqlText: contextQuery,
-	binds: [TARGET_TABLE, batchLoopEnd, batchScheduleCurrent]
+	binds: [TARGET_DATA, batchLoopEnd, batchScheduleCurrent]
 });
 
 if (!SCRIPT_ONLY) { contextStmt.execute(); }
@@ -559,14 +571,14 @@ if (!SCRIPT_ONLY) { contextStmt.execute(); }
 while (batchLoopTag <= batchLoopEnd) {
 	var contextQuery = `UPDATE DATA_AGGREGATION_TARGETS \n `
 		+ `SET BATCH_MICROCHUNK_CURRENT = :2 \n `
-		+ `WHERE TARGET_TABLE = :1;`;
+		+ `WHERE TARGET_DATA = :1;`;
 	var contextStmt = snowflake.createStatement({
 		sqlText: contextQuery,
-		binds: [TARGET_TABLE, batchLoopTag.toISOString()]
+		binds: [TARGET_DATA, batchLoopTag.toISOString()]
 	});
 	if (!SCRIPT_ONLY) { contextStmt.execute(); }
 
-	var deleteQuery = `DELETE FROM ` + TARGET_TABLE
+	var deleteQuery = `DELETE FROM ` + TARGET_DATA
 		+ ` WHERE ` + batchControlColumn + ` >= :1`
 		+ ` AND ` + batchControlColumn + ` < DATEADD(MINUTE, :2, :1);\n`;
 	var deleteScheduled = deleteQuery
@@ -575,7 +587,7 @@ while (batchLoopTag <= batchLoopEnd) {
 
 	var callQuery = `CALL DATA_AGGREGATOR (:1, :2, :3, :4, :5);\n`;
 	var callScheduled = callQuery
-		.replace(/:1/g, '\'' + TARGET_TABLE + '\'')
+		.replace(/:1/g, '\'' + TARGET_DATA + '\'')
 		.replace(/:2/g, SCRIPT_ONLY.toString())
 		.replace(/:3/g, LOG_DETAILS.toString())
 		.replace(/:4/g, NON_ENABLED.toString())
@@ -588,27 +600,29 @@ while (batchLoopTag <= batchLoopEnd) {
 				binds: [batchLoopTag.toISOString(), batchControlSize]
 			});
 			removalStmt.execute();
+			callStatus = 'PASS';
 			callResult = '[INFO-1] Successfully deleted the existing data for reloading';
 		}
 		catch (err) {
-			callResult = '[ERROR] Failure to delete the existing data from target table => ' + err
+			callStatus = 'FAIL';
+			callResult = '[FAIL] Failure to delete the existing data from target table => ' + err
 		}
 		finally {
-			if (LOG_DETAILS || callResult.startsWith('[ERROR]')) {
-				var logQuery = 'INSERT INTO DATA_AGGREGATION_LOGGING(EVENT_TARGET, EVENT_SOURCE, EVENT_STATE, EVENT_QUERY) VALUES(:1, :2, :3, :4)';
+			if (LOG_DETAILS || callStatus.startsWith('FAIL')) {
+				var logQuery = 'INSERT INTO DATA_AGGREGATION_LOGGING(EVENT_TARGET, EVENT_SOURCE, EVENT_STATUS, EVENT_STATE, EVENT_QUERY) VALUES(:1, :2, :3, :4, :5)';
 				var logStmt = snowflake.createStatement({
 					sqlText: logQuery,
-					binds: [TARGET_TABLE, '(*** All loaded data covered by current batch ***)', callResult, deleteScheduled]
+					binds: [TARGET_DATA, '(*** All loaded data covered by current batch ***)', callStatus, callResult, deleteScheduled]
 				});
 				logStmt.execute()
 			}
 		}
 
 		if (LOG_DETAILS) {
-			var logQuery = 'INSERT INTO DATA_AGGREGATION_LOGGING(EVENT_TARGET, EVENT_SOURCE, EVENT_STATE, EVENT_QUERY) VALUES(:1, :2, :3, :4)';
+			var logQuery = 'INSERT INTO DATA_AGGREGATION_LOGGING(EVENT_TARGET, EVENT_SOURCE, EVENT_STATUS, EVENT_STATE, EVENT_QUERY) VALUES(:1, :2, :3, :4, :5)';
 			var logStmt = snowflake.createStatement({
 				sqlText: logQuery,
-				binds: [TARGET_TABLE, '(*** All enabled data sources ***)', '[INFO-2] Make a batch data load call', callScheduled]
+				binds: [TARGET_DATA, '(*** All enabled data sources ***)', 'INFO', '[INFO-2] Make a batch data load call', callScheduled]
 			});
 			logStmt.execute()
 		}
@@ -616,20 +630,22 @@ while (batchLoopTag <= batchLoopEnd) {
 		try {
 			var callStmt = snowflake.createStatement({
 				sqlText: callQuery,
-				binds: [TARGET_TABLE, SCRIPT_ONLY.toString(), LOG_DETAILS.toString(), NON_ENABLED.toString(), batchLoopTag.toISOString()]
+				binds: [TARGET_DATA, SCRIPT_ONLY.toString(), LOG_DETAILS.toString(), NON_ENABLED.toString(), batchLoopTag.toISOString()]
 			});
 			callStmt.execute();
+			callStatus = 'PASS';
 			callResult = '[INFO-2] Successfully completed the batch load call';
 		}
 		catch (err) {
-			callResult = '[ERROR] Failure to complete the batch load call => ' + err
+			callStatus = 'FAIL';
+			callResult = '[FAIL] Failure to complete the batch load call => ' + err
 		}
 		finally {
-			if (LOG_DETAILS || callResult.startsWith('[ERROR]')) {
-				var logQuery = 'INSERT INTO DATA_AGGREGATION_LOGGING(EVENT_TARGET, EVENT_SOURCE, EVENT_STATE, EVENT_QUERY) VALUES(:1, :2, :3, :4)';
+			if (LOG_DETAILS || callStatus.startsWith('FAIL')) {
+				var logQuery = 'INSERT INTO DATA_AGGREGATION_LOGGING(EVENT_TARGET, EVENT_SOURCE, EVENT_STATUS, EVENT_STATE, EVENT_QUERY) VALUES(:1, :2, :3, :4, :5)';
 				var logStmt = snowflake.createStatement({
 					sqlText: logQuery,
-					binds: [TARGET_TABLE, '', callResult, callScheduled]
+					binds: [TARGET_DATA, '', callStatus, callResult, callScheduled]
 				});
 				logStmt.execute()
 			}
@@ -650,19 +666,19 @@ while (batchLoopTag <= batchLoopEnd) {
 // Clear the batch exclusion control context
 //
 var contextQuery = `UPDATE DATA_AGGREGATION_TARGETS T \n`
-	+ `SET BATCH_MICROCHUNK_CURRENT = NULL, BATCH_PROCESSING = NULL, BATCH_PROCESSED = S.DATA_AVAILABLETIME \n`
+	+ `SET BATCH_MICROCHUNK_CURRENT = NULL, BATCH_PROCESSING = NULL, BATCH_PROCESSED = S.SOURCE_READY_TIME \n`
 	+ `FROM ( \n`
-	+ `SELECT d.TARGET_TABLE, MIN(COALESCE(s.DATA_AVAILABLETIME, d.BATCH_PROCESSED)) DATA_AVAILABLETIME \n`
+	+ `SELECT d.TARGET_DATA, MIN(COALESCE(s.SOURCE_READY_TIME, d.BATCH_PROCESSED)) SOURCE_READY_TIME \n`
 	+ `FROM DATA_AGGREGATION_TARGETS d \n`
 	+ `JOIN DATA_AGGREGATION_SOURCES s \n`
-	+ `USING(TARGET_TABLE) \n`
+	+ `USING(TARGET_ID) \n`
 	+ `WHERE s.SOURCE_ENABLED = True \n`
-	+ `GROUP BY d.TARGET_TABLE \n`
+	+ `GROUP BY d.TARGET_DATA \n`
 	+ `) S \n`
-	+ `WHERE T.TARGET_TABLE = S.TARGET_TABLE AND T.TARGET_TABLE = :1;`;
+	+ `WHERE T.TARGET_DATA = S.TARGET_DATA AND T.TARGET_DATA = :1;`;
 var contextStmt = snowflake.createStatement({
 	sqlText: contextQuery,
-	binds: [TARGET_TABLE]
+	binds: [TARGET_DATA]
 });
 
 if (!SCRIPT_ONLY) { contextStmt.execute(); }
