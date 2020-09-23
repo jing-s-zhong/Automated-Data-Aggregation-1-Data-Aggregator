@@ -99,16 +99,22 @@ schedule7_degrade.bat BI_TEST _CONTROL_LOGIC
 ```
 
 
-## III. Setup the solution for data aggregtion
+## III. Setup the solution for data processing
+
 
 ### Create or select a target table to accept the summary data
 
+
 ### Configure the target table in the solution
+
 
 ### Configure the source data which will be aggregated
 
+
 ### Make a manual test processing
 
+
 ### Make an automation full processing
+
 
 ### Setup snow tasks for schedule automation
