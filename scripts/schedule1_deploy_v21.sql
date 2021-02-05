@@ -10,6 +10,147 @@ use schema &{sc_name};
 -- Create task management tables
 -------------------------------------------------------
 --
+-- DROP SEQUENCE DATA_AGGREGATION_DIALECTS_SEQ;
+--
+CREATE OR REPLACE SEQUENCE DATA_AGGREGATION_DIALECTS_SEQ START = 1 INCREMENT = 1;
+--
+-- DROP TABLE DATA_AGGREGATION_DIALECTS;
+--
+CREATE OR REPLACE TABLE DATA_AGGREGATION_DIALECTS
+(
+	DIALECT_ID 					NUMBER NOT NULL DEFAULT DATA_AGGREGATION_DIALECTS_SEQ.NEXTVAL,
+	DIALECT_LABEL				TEXT,
+	DIALECT_NAME				TEXT NOT NULL,
+	DIALECT_TYPE				TEXT NOT NULL,
+	CONSTRAINT PK_DATA_AGGREGATION_DIALECTS PRIMARY KEY (DIALECT_ID)
+)
+CLUSTER BY (DIALECT_ID)
+COMMENT = 'This table is used to register the sql statement templates'
+;
+--
+-- DROP SEQUENCE DATA_AGGREGATION_SYNTAXES_SEQ;
+--
+CREATE OR REPLACE SEQUENCE DATA_AGGREGATION_SYNTAXES_SEQ START = 1 INCREMENT = 1;
+--
+-- DROP TABLE DATA_AGGREGATION_SYNTAXES;
+--
+CREATE OR REPLACE TABLE DATA_AGGREGATION_SYNTAXES
+(
+	SYNTAX_ID 				NUMBER NOT NULL DEFAULT DATA_AGGREGATION_SYNTAXES_SEQ.NEXTVAL,
+	SYNTAX_LABEL			TEXT,
+	DIALECT_ID				NUMBER NOT NULL,
+	SYNTAX_CASE				TEXT NOT NULL,
+	SYNTAX_TEMPLATE			TEXT NOT NULL,
+	CONSTRAINT PK_DATA_AGGREGATION_SYNTAXES PRIMARY KEY (SYNTAX_ID)
+)
+CLUSTER BY (SYNTAX_ID)
+COMMENT = 'This table is used to register the sql statement templates'
+;
+-------------------------------------------------------
+-- Preset databse dialect
+-------------------------------------------------------
+--
+-- TRUNCATE TABLE DATA_AGGREGATION_DIALECTS;
+--
+INSERT OVERWRITE INTO DATA_AGGREGATION_DIALECTS
+(
+	DIALECT_LABEL,
+	DIALECT_NAME,
+	DIALECT_TYPE
+)
+SELECT 
+	$1 DIALECT_LABEL,
+	$2 DIALECT_NAME,
+	$3 DIALECT_TYPE
+FROM VALUES 
+(
+	'snowflake' /*DIALECT_LABEL*/,
+	'snowflake' /*DIALECT_NAME*/,
+	'SQL-1999' /*DIALECT_TYPE*/
+);
+--
+-- TRUNCATE TABLE DATA_AGGREGATION_SYNTAXES;
+--
+INSERT OVERWRITE INTO DATA_AGGREGATION_SYNTAXES
+(
+	SYNTAX_LABEL,
+	DIALECT_ID,
+	SYNTAX_CASE,
+	SYNTAX_TEMPLATE
+)
+SELECT 
+	$1 SYNTAX_LABEL,
+	$2 DIALECT_ID,
+	$3 SYNTAX_CASE,
+	$4 SYNTAX_TEMPLATE
+FROM VALUES 
+(
+	'snowflake_delete' /*SYNTAX_LABEL*/,
+	1 /*DIALECT_ID*/,
+	'D' /*SYNTAX_CASE*/,
+	$$
+	DELETE FROM <targetData>
+	[WHERE <whereClauseList>];
+	$$ /*SYNTAX_TEMPLATE*/
+),
+(
+	'snowflake_insert_by_select' /*SYNTAX_LABEL*/,
+	1 /*DIALECT_ID*/,
+	'CR' /*SYNTAX_CASE*/,
+	$$
+	INSERT [OVERWRITE] INTO <targetData> (
+		<dimensionColumnList>,
+		<measureColumnList>
+	)
+	SELECT 
+		<groupByList>,
+		<measureColumnList>
+	FROM <sourceData>
+	JOIN <filerData>
+	ON <filerColumnList>
+	WHERE <whereClauseList>
+	GROUP BY <groupByList>
+	HAVING <havingClauseList>
+	ORDER BY <orderByList>
+	$$ /*SYNTAX_TEMPLATE*/
+),
+(
+	'snowflake_update_by_join' /*SYNTAX_LABEL*/,
+	1 /*DIALECT_ID*/,
+	'RU' /*SYNTAX_CASE*/,
+	$$
+	$$ /*SYNTAX_TEMPLATE*/
+),
+(
+	'snowflake_delete_by_join' /*SYNTAX_LABEL*/,
+	1 /*DIALECT_ID*/,
+	'RD' /*SYNTAX_CASE*/,
+	$$
+	$$ /*SYNTAX_TEMPLATE*/
+),
+(
+	'snowflake_merge_by_select' /*SYNTAX_LABEL*/,
+	1 /*DIALECT_ID*/,
+	'CRUD' /*SYNTAX_CASE*/,
+	$$
+	MERGE INTO <targetData> <targetAlias>
+	USING (
+	SELECT <groupByList>,<aggregateList>
+	FROM (
+		SELECT <selectList>,<aggregateColumns>
+		FROM <transformation>
+		WHERE <batchControlColumn> >= :1 AND <batchControlColumn> < <batchControlNext>
+		)
+	GROUP BY <groupByList>
+	) <sourceAlias>
+	ON <universeJoinList>
+	WHEN MATCHED THEN UPDATE SET <measureUpdateList>
+	WHEN NOT MATCHED THEN INSERT(<dimensionList>,<measureColumns>)
+	VALUES (<aliasedGroupByList>,<aliasedMeasureList>);
+	$$ /*SYNTAX_TEMPLATE*/
+);
+--
+--
 -- DROP SEQUENCE DATA_AGGREGATION_TARGETS_SEQ;
 --
 CREATE SEQUENCE DATA_AGGREGATION_TARGETS_SEQ START = 1 INCREMENT = 1;
@@ -87,7 +228,6 @@ CREATE TABLE DATA_AGGREGATION_LOGGING
 )
 COMMENT = 'This table is used to log the error of running the processing'
 ;
---
 !set variable_substitution=false;
 -------------------------------------------------------
 -- Create assisstant functions
@@ -237,7 +377,7 @@ $$;
 --
 -- Aggregate generation stored procedues for indivual source
 -- DROP PROCEDURE DATA_AGGREGATOR(VARCHAR, BOOLEAN, BOOLEAN, BOOLEAN, VARCHAR);
-CREATE PROCEDURE  DATA_AGGREGATOR (
+CREATE OR REPLACE PROCEDURE  DATA_AGGREGATOR (
 	TARGET_DATA VARCHAR,
 	SCRIPT_ONLY BOOLEAN,
 	LOG_DETAILS BOOLEAN,
@@ -416,7 +556,7 @@ $$;
 -- Aggregate stored procedues to loop all available source tables
 -- DROP PROCEDURE DATA_AGGREGATOR(VARCHAR, BOOLEAN, BOOLEAN);
 --
-CREATE PROCEDURE DATA_AGGREGATOR (
+CREATE OR REPLACE PROCEDURE DATA_AGGREGATOR (
 	TARGET_DATA VARCHAR,
 	SCRIPT_ONLY BOOLEAN,
 	LOG_DETAILS BOOLEAN
@@ -575,7 +715,13 @@ while (batchLoopTag <= batchLoopEnd) {
 		if (LOG_DETAILS) {
 			var logStmt = snowflake.createStatement({
 				sqlText: logQuery,
-				binds: [TARGET_DATA, '(*** All enabled data sources ***)', 'INFO', '[INFO-2] Make a batch data load call', callScheduled]
+				binds: [
+                    TARGET_DATA, 
+                    '(*** All enabled data sources ***)', 
+                    'INFO', 
+                    '[INFO-2] Make a batch data load call', 
+                    callScheduled
+                    ]
 			});
 			logStmt.execute()
 		}
