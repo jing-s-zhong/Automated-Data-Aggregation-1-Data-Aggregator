@@ -16,7 +16,6 @@ cd GitHub
 
 ```
 
-
 Configure the snowSQL client as a text file in the local working folder
 
 ```
