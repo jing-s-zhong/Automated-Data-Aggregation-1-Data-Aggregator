@@ -1,4 +1,4 @@
-# Automated Data Aggregation (1): Data Aggregator
+# Data Process Architecture (1): Data Aggregator
 
 There are three prerequites to setup the data aggregation solution.
 (1) A snowflake access account;
